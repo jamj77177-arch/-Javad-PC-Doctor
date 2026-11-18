@@ -642,7 +642,7 @@ class DoctorApp:
         status='گزارش ویندوز دریافت شد' if ('Healthy' in health or 'خوب' in health) else 'نیازمند بررسی'
         if 'قابل دریافت نبود' in health:
             status='نیازمند بررسی'
-        return status, health.replace('\\n',' | ') + ' | این گزارش معادل آزمون کامل SMART یا اسکن سطح دیسک نیست.'
+        return status, health.replace('\n',' | ') + ' | این گزارش معادل آزمون کامل SMART یا اسکن سطح دیسک نیست.'
     def test_gpu(self):
         gpu=self.info.get('GPU details','شناسایی نشد')
         if not gpu or gpu == 'شناسایی نشد':
@@ -769,9 +769,9 @@ class DoctorApp:
                 lines.append(f'{title}: {inventory.get(key) or "شناسایی نشد"}')
             lines.append('')
             lines.append('دمای ناموجود حدس زده نمی‌شود. گزارش سلامت دیسک، گزارش ویندوز است و جایگزین آزمون کامل SMART نیست. سرعت فن در این نسخه هنوز از همه سخت‌افزارها قابل خواندن نیست.')
-            messagebox.showinfo('مشخصات سخت‌افزار و سنسورها', '\\n'.join(lines))
+            messagebox.showinfo('مشخصات سخت‌افزار و سنسورها', '\n'.join(lines))
         except Exception as exc:
-            messagebox.showinfo('دما و سنسورها', f'خواندن اطلاعات ناموفق بود: {exc}\\nدمای ناموجود حدس زده نمی‌شود.')
+            messagebox.showinfo('دما و سنسورها', f'خواندن اطلاعات ناموفق بود: {exc}\nدمای ناموجود حدس زده نمی‌شود.')
     def save_report(self):
         self.refresh_info()
         stamp=datetime.datetime.now().strftime('%Y%m%d_%H%M%S'); name=f"Report_{self.info.get('Computer','PC')}_{stamp}.txt".replace(' ','_')
