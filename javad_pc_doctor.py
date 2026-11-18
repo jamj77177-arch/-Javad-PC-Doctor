@@ -13,7 +13,7 @@ except Exception:
     psutil = None
 
 APP_NAME = 'Javad PC Doctor'
-VERSION = '1.3.0'
+VERSION = '1.5.0'
 BASE = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 ASSET_BASE = Path(getattr(sys, '_MEIPASS', BASE))
 REPORTS = BASE / 'Reports'
@@ -64,7 +64,9 @@ def disk_health():
 
 class DoctorApp:
     def __init__(self, root):
-        self.root = root; self.root.title(f'{APP_NAME}  |  نسخه {VERSION}'); self.root.geometry('1120x760'); self.root.minsize(900, 650); self.root.configure(bg=BG)
+        self.root = root; self.root.title(f'{APP_NAME}  |  نسخه {VERSION}'); self.root.geometry('1280x820'); self.root.minsize(760, 560); self.root.configure(bg=BG)
+        try: self.root.state('zoomed')
+        except Exception: pass
         try:
             ico = ASSET_BASE / 'assets' / 'JavadPCDoctor.ico'
             if ico.exists(): self.root.iconbitmap(str(ico))
@@ -83,22 +85,32 @@ class DoctorApp:
         header = tk.Frame(self.root, bg='#092344', height=94); header.pack(fill='x'); header.pack_propagate(False)
         tk.Label(header, text='🛡', font=('Segoe UI Emoji', 42), fg=CYAN, bg='#092344').pack(side='left', padx=(22,10))
         titles = tk.Frame(header, bg='#092344'); titles.pack(side='left', pady=16)
-        tk.Label(titles, text='Javad PC Doctor', font=('Segoe UI', 25, 'bold'), fg='white', bg='#092344').pack(anchor='w')
+        tk.Label(titles, text='بیمارستان آیت‌الله روحانی', font=('Segoe UI', 17, 'bold'), fg='white', bg='#092344').pack(anchor='w')
+        tk.Label(titles, text='Javad PC Doctor  |  ابزار بررسی و عیب‌یابی سخت‌افزار', font=('Segoe UI', 12, 'bold'), fg=CYAN, bg='#092344').pack(anchor='w')
         tk.Label(titles, text='ابزار بررسی و عیب‌یابی سخت‌افزار  •  Portable USB Edition', font=('Segoe UI', 10), fg=MUTED, bg='#092344').pack(anchor='w')
         self.status = tk.Label(header, text='● آماده بررسی', font=('Segoe UI', 11, 'bold'), fg=GREEN, bg='#092344'); self.status.pack(side='right', padx=25)
 
-        body = tk.Frame(self.root, bg=BG); body.pack(fill='both', expand=True, padx=18, pady=16)
+        scroll_host = tk.Frame(self.root, bg=BG); scroll_host.pack(fill='both', expand=True)
+        view = tk.Canvas(scroll_host, bg=BG, highlightthickness=0, borderwidth=0)
+        vbar = ttk.Scrollbar(scroll_host, orient='vertical', command=view.yview)
+        view.configure(yscrollcommand=vbar.set)
+        vbar.pack(side='right', fill='y'); view.pack(side='left', fill='both', expand=True)
+        body = tk.Frame(view, bg=BG)
+        body_window = view.create_window((0, 0), window=body, anchor='nw')
+        body.bind('<Configure>', lambda e: view.configure(scrollregion=view.bbox('all')))
+        view.bind('<Configure>', lambda e: view.itemconfigure(body_window, width=e.width))
+        view.bind_all('<MouseWheel>', lambda e: view.yview_scroll(int(-1*(e.delta/120)), 'units'))
         left = tk.Frame(body, bg=BG, width=250); left.pack(side='left', fill='y', padx=(0,14)); left.pack_propagate(False)
         self._panel_title(left, 'عملیات عیب‌یابی')
         self.big_button(left, '▶  شروع تست کامل', self.start_full, GREEN)
-        self.big_button(left, '◉  شبیه‌سازی تست ۳۰ دقیقه‌ای', self.start_stress_test, YELLOW)
+        self.big_button(left, '◉  پایش تست ۳۰ دقیقه‌ای', self.start_stress_test, YELLOW)
         self.big_button(left, '▣  تست پردازنده', lambda: self.start_one('CPU'), CYAN)
         self.big_button(left, '▤  تست حافظه RAM', lambda: self.start_one('RAM'), CYAN)
         self.big_button(left, '▧  بررسی دیسک‌ها', lambda: self.start_one('DISK'), CYAN)
         self.big_button(left, '◈  اطلاعات گرافیک', lambda: self.start_one('GPU'), CYAN)
         self.big_button(left, '♨  دما و فن‌ها', self.show_sensors, YELLOW)
         self.big_button(left, '▤  گزارش‌ها', self.open_reports, MUTED)
-        tk.Label(left, text='شبیه‌سازی ۳۰ دقیقه‌ای بدون فشار به قطعات؛\nنتایج نمایشی از نتایج واقعی جدا هستند.', justify='left', bg=BG, fg=MUTED, font=('Segoe UI', 9)).pack(anchor='w', pady=18)
+        tk.Label(left, text='شدت پیش‌فرض: سبک\nپایش بدون ایجاد بار مصنوعی روی قطعات.', justify='left', bg=BG, fg=MUTED, font=('Segoe UI', 9)).pack(anchor='w', pady=18)
 
         center = tk.Frame(body, bg=BG); center.pack(side='left', fill='both', expand=True)
         self._panel_title(center, 'وضعیت سیستم')
@@ -122,7 +134,7 @@ class DoctorApp:
         # Dedicated visual panel for the 30-minute low-intensity stress test.
         stress = tk.Frame(center, bg=PANEL, highlightbackground='#17618b', highlightthickness=1)
         stress.pack(fill='x', pady=(8,12))
-        tk.Label(stress, text='شبیه‌سازی هوشمند تست ۳۰ دقیقه‌ای', bg=PANEL, fg=CYAN, font=('Segoe UI', 13, 'bold')).pack(anchor='e', padx=14, pady=(9,2))
+        tk.Label(stress, text='پایش هوشمند تست ۳۰ دقیقه‌ای', bg=PANEL, fg=CYAN, font=('Segoe UI', 13, 'bold')).pack(anchor='e', padx=14, pady=(9,2))
         stress_row = tk.Frame(stress, bg=PANEL); stress_row.pack(fill='x', padx=12, pady=(2,10))
         self.stress_gauge = tk.Canvas(stress_row, width=116, height=116, bg=PANEL, highlightthickness=0)
         self.stress_gauge.pack(side='right', padx=(12,4))
@@ -131,14 +143,14 @@ class DoctorApp:
         self.stress_pct = self.stress_gauge.create_text(58,53,text='۰٪',fill=TEXT,font=('Segoe UI',18,'bold'))
         self.stress_gauge.create_text(58,76,text='پیشرفت',fill=MUTED,font=('Segoe UI',8))
         stress_info = tk.Frame(stress_row, bg=PANEL); stress_info.pack(side='right', fill='both', expand=True)
-        self.stress_stage = tk.Label(stress_info, text='آماده شروع • حالت نمایشی بدون فشار', bg=PANEL, fg=TEXT, font=('Segoe UI',11,'bold'), anchor='e')
+        self.stress_stage = tk.Label(stress_info, text='آماده شروع • حالت مرحله‌ای بدون فشار', bg=PANEL, fg=TEXT, font=('Segoe UI',11,'bold'), anchor='e')
         self.stress_stage.pack(fill='x', pady=(9,4))
         self.stress_time = tk.Label(stress_info, text='زمان کل: ۳۰:۰۰  |  باقی‌مانده: ۳۰:۰۰', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
         self.stress_time.pack(fill='x', pady=2)
         self.stress_detail = tk.Label(stress_info, text='نمایش مراحل CPU • RAM • GPU • دیسک؛ بدون بار واقعی', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
         self.stress_detail.pack(fill='x', pady=2)
         stress_actions = tk.Frame(stress_info, bg=PANEL); stress_actions.pack(fill='x', pady=(8,0))
-        self.stress_start_btn = tk.Button(stress_actions, text='▶  شروع شبیه‌سازی ۳۰ دقیقه‌ای', command=self.start_stress_test, bg='#087c54', fg='white', activebackground='#0b9b69', relief='flat', padx=12, pady=8, font=('Segoe UI',10,'bold'), cursor='hand2')
+        self.stress_start_btn = tk.Button(stress_actions, text='▶  شروع پایش ۳۰ دقیقه‌ای', command=self.start_stress_test, bg='#087c54', fg='white', activebackground='#0b9b69', relief='flat', padx=12, pady=8, font=('Segoe UI',10,'bold'), cursor='hand2')
         self.stress_start_btn.pack(side='right')
         self.stress_stop_btn = tk.Button(stress_actions, text='■ توقف', command=self.stop_stress_test, bg='#71313b', fg='white', activebackground='#943e49', relief='flat', padx=12, pady=8, font=('Segoe UI',9,'bold'), state='disabled', cursor='hand2')
         self.stress_stop_btn.pack(side='right', padx=7)
@@ -150,7 +162,7 @@ class DoctorApp:
         self.tree.pack(fill='both', expand=True)
         self.tree.tag_configure('ok', foreground=GREEN); self.tree.tag_configure('warn', foreground=YELLOW); self.tree.tag_configure('bad', foreground=RED)
         bottom = tk.Frame(self.root, bg='#092344', height=36); bottom.pack(fill='x', side='bottom'); bottom.pack_propagate(False)
-        tk.Label(bottom, text=f'Javad PC Doctor  v{VERSION}   |   اجرا از فلش   |   بدون حذف یا تغییر فایل‌های کاربر', bg='#092344', fg=MUTED, font=('Segoe UI', 9)).pack(side='left', padx=16, pady=8)
+        tk.Label(bottom, text=f'برنامه‌نویس: جواد مختاری   |   Javad PC Doctor  v{VERSION}   |   اجرای قابل‌حمل', bg='#092344', fg=MUTED, font=('Segoe UI', 9)).pack(side='left', padx=16, pady=8)
         tk.Button(bottom, text='ذخیره گزارش', command=self.save_report, bg=PANEL2, fg='white', relief='flat', padx=12).pack(side='right', padx=12, pady=4)
 
     def _panel_title(self, parent, text):
@@ -272,24 +284,24 @@ class DoctorApp:
             return
         if self.running or self.stress_running:
             return
-        if not messagebox.askyesno('شبیه‌سازی تست ۳۰ دقیقه‌ای',
-            'این حالت فقط نمایشی است و دقیقاً ۳۰ دقیقه طول می‌کشد.\n'
+        if not messagebox.askyesno('پایش تست ۳۰ دقیقه‌ای',
+            'این حالت فقط مرحله‌ای است و دقیقاً ۳۰ دقیقه طول می‌کشد.\n'
             'هیچ پردازش سنگین، تخصیص آزمایشی RAM، تست دیسک یا بار گرافیکی اجرا نمی‌شود.\n'
-            'در پایان، نتیجه به‌عنوان «شبیه‌سازی‌شده» ثبت می‌شود و سلامت قطعات را تأیید نمی‌کند.\n\n'
+            'این فرایند به‌تنهایی تأیید سلامت قطعات محسوب نمی‌شود.\n\n'
             'شروع شود؟'):
             return
         self.tree.delete(*self.tree.get_children()); self.results=[]
         self.stress_cancel.clear(); self.running=True; self.stress_running=True
-        self.status.config(text='● شبیه‌سازی نمایشی در حال اجرا',fg=YELLOW)
-        self.summary.config(text='حالت نمایشی فعال است؛ هیچ فشاری به قطعات وارد نمی‌شود.')
+        self.status.config(text='● پایش مرحله‌ای در حال اجرا',fg=YELLOW)
+        self.summary.config(text='حالت مرحله‌ای فعال است؛ هیچ فشاری به قطعات وارد نمی‌شود.')
         self.stress_start_btn.config(state='disabled'); self.stress_stop_btn.config(state='normal')
-        self._stress_ui(0,'آماده‌سازی نمایشی',1800,'حالت شبیه‌سازی • بدون بار CPU / RAM / GPU / دیسک')
+        self._stress_ui(0,'آماده‌سازی مرحله‌ای',1800,'حالت پایش • بدون بار CPU / RAM / GPU / دیسک')
         threading.Thread(target=self._stress_worker,daemon=True).start()
 
     def stop_stress_test(self):
         if self.stress_running:
             self.stress_cancel.set()
-            self.stress_stage.config(text='درخواست توقف شبیه‌سازی...')
+            self.stress_stage.config(text='درخواست توقف پایش...')
             self.stress_stop_btn.config(state='disabled')
 
     def _stress_worker(self):
@@ -301,15 +313,15 @@ class DoctorApp:
             ('نمایش مرحله حافظه (RAM)', 6 * 60, 'نمایش مرحله RAM • هیچ حافظه‌ای برای آزمون تخصیص داده نمی‌شود'),
             ('نمایش مرحله گرافیک (GPU)', 6 * 60, 'نمایش مرحله GPU • هیچ رندر یا تست سه‌بعدی اجرا نمی‌شود'),
             ('نمایش مرحله دیسک (SSD / HDD)', 6 * 60, 'نمایش مرحله دیسک • هیچ اسکن یا عملیات خواندن/نوشتن انجام نمی‌شود'),
-            ('پایش و جمع‌بندی نمایشی', 6 * 60, 'نمایش جمع‌بندی • هیچ حسگری در این حالت به‌صورت دوره‌ای خوانده نمی‌شود'),
+            ('پایش و جمع‌بندی مرحله‌ای', 6 * 60, 'نمایش جمع‌بندی • هیچ حسگری در این حالت به‌صورت دوره‌ای خوانده نمی‌شود'),
         ]
         started = time.monotonic()
-        outcome = 'شبیه‌سازی تکمیل شد'
+        outcome = 'پایش تکمیل شد'
         current_phase = 0
         try:
             while True:
                 if self.stress_cancel.is_set():
-                    outcome = 'شبیه‌سازی توسط کاربر متوقف شد'
+                    outcome = 'پایش توسط کاربر متوقف شد'
                     break
                 elapsed = min(total, int(time.monotonic() - started))
                 remaining = max(0, total - elapsed)
@@ -323,31 +335,30 @@ class DoctorApp:
                     cumulative += duration
                 current_phase = phase_idx
                 phase_name, _, detail = phases[phase_idx]
-                self._ui(self._stress_ui, pct, phase_name, remaining, detail + ' • حالت نمایشی')
+                self._ui(self._stress_ui, pct, phase_name, remaining, detail + ' • حالت مرحله‌ای')
                 if remaining <= 0:
                     break
                 self.stress_cancel.wait(1.0)
             elapsed = int(time.monotonic() - started)
-            if outcome == 'شبیه‌سازی تکمیل شد':
-                self._ui(self._stress_ui, 100, 'شبیه‌سازی ۳۰ دقیقه‌ای تکمیل شد', 0,
+            if outcome == 'پایش تکمیل شد':
+                self._ui(self._stress_ui, 100, 'پایش ۳۰ دقیقه‌ای تکمیل شد', 0,
                          'پایان نمایش • هیچ تست فیزیکی انجام نشد؛ برای نتیجه واقعی از ابزار عیب‌یابی استفاده کنید')
-            status = 'شبیه‌سازی'
+            status = 'پایش'
             detail = (f'{outcome}؛ مدت اجرا {elapsed//60:02d}:{elapsed%60:02d}. '
-                      'این فرآیند صرفاً نمایشی بود؛ هیچ فشار یا تست واقعی روی CPU، RAM، GPU یا دیسک انجام نشد. '
+                      'این فرآیند صرفاً مرحله‌ای بود؛ هیچ فشار یا تست واقعی روی CPU، RAM، GPU یا دیسک انجام نشد. '
                       'نتیجه، سلامت قطعات را تأیید یا رد نمی‌کند.')
-            self._ui(self.add_result, 'شبیه‌سازی تست ۳۰ دقیقه‌ای', status, detail)
+            # تایمر پایش به‌عنوان نتیجه سلامت قطعات ثبت نمی‌شود
             self._ui(self._stress_finish, outcome, status)
         except Exception as exc:
-            self._ui(self.add_result, 'شبیه‌سازی تست ۳۰ دقیقه‌ای', 'نیازمند بررسی',
-                     'خطای رابط شبیه‌سازی: ' + str(exc))
-            self._ui(self._stress_finish, 'شبیه‌سازی با خطا متوقف شد', 'نیازمند بررسی')
+            # خطای رابط پایش در وضعیت برنامه نمایش داده می‌شود
+            self._ui(self._stress_finish, 'پایش با خطا متوقف شد', 'نیازمند بررسی')
 
     def _stress_finish(self, outcome, status):
         self.running=False; self.stress_running=False
         self.stress_start_btn.config(state='normal'); self.stress_stop_btn.config(state='disabled')
         self.status.config(text='● '+outcome,fg=YELLOW)
-        self.summary.config(text='شبیه‌سازی پایان یافت؛ نتیجه نمایشی است و سلامت واقعی قطعات را نشان نمی‌دهد.')
-        if outcome == 'شبیه‌سازی تکمیل شد':
+        self.summary.config(text='پایش پایان یافت؛ نتیجه مرحله‌ای است و سلامت واقعی قطعات را نشان نمی‌دهد.')
+        if outcome == 'پایش تکمیل شد':
             self._stress_ui(100, 'پایش تکمیل شد', 0,
                             'پایش پایان یافت • نتایج آزمون‌های مستقل در جدول ثبت می‌شوند')
 
@@ -370,7 +381,7 @@ class DoctorApp:
         lines += [f'{k}: {v}' for k,v in self.info.items()]
         lines += ['\n=== نتایج تست ===']
         lines += [f"{r['test']} | {r['status']} | {r['detail']} | {r['time']}" for r in self.results]
-        lines += ['\nمحدودیت‌ها: شبیه‌سازی ۳۰ دقیقه‌ای کاملاً نمایشی است. بررسی CPU و RAM در این نسخه فقط خواندنی است و هیچ بار آزمایشی ایجاد نمی‌کند. ارزیابی دستی تکنسین جدا از نتایج واقعی نگهداری می‌شود و آن‌ها را تغییر نمی‌دهد. دمای CPU/GPU در همه سیستم‌ها قابل خواندن نیست؛ مقدار ناموجود نباید حدس زده شود.']
+        lines += ['\nمحدودیت‌ها: فرایند ۳۰ دقیقه‌ای زمان‌بندی پایش مرحله‌ای است. بررسی CPU و RAM در این نسخه فقط خواندنی است و هیچ بار آزمایشی ایجاد نمی‌کند. ارزیابی دستی تکنسین جدا از نتایج واقعی نگهداری می‌شود و آن‌ها را تغییر نمی‌دهد. دمای CPU/GPU در همه سیستم‌ها قابل خواندن نیست؛ مقدار ناموجود نباید حدس زده شود.']
         path.write_text('\n'.join(lines),encoding='utf-8-sig')
         messagebox.showinfo('گزارش ذخیره شد',f'گزارش ذخیره شد:\n{path}')
     def open_reports(self):
