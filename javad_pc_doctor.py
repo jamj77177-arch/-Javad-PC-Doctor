@@ -103,7 +103,7 @@ class DoctorApp:
         left = tk.Frame(body, bg=BG, width=250); left.pack(side='left', fill='y', padx=(0,14)); left.pack_propagate(False)
         self._panel_title(left, 'عملیات عیب‌یابی')
         self.big_button(left, '▶  شروع تست کامل', self.start_full, GREEN)
-        self.big_button(left, '◉  پایش تست ۳۰ دقیقه‌ای', self.start_stress_test, YELLOW)
+        self.big_button(left, '◉  پایش هوشمند ۳۰ دقیقه‌ای', self.start_stress_test, YELLOW)
         self.big_button(left, '▣  تست پردازنده', lambda: self.start_one('CPU'), CYAN)
         self.big_button(left, '▤  تست حافظه RAM', lambda: self.start_one('RAM'), CYAN)
         self.big_button(left, '▧  بررسی دیسک‌ها', lambda: self.start_one('DISK'), CYAN)
@@ -143,11 +143,11 @@ class DoctorApp:
         self.stress_pct = self.stress_gauge.create_text(58,53,text='۰٪',fill=TEXT,font=('Segoe UI',18,'bold'))
         self.stress_gauge.create_text(58,76,text='پیشرفت',fill=MUTED,font=('Segoe UI',8))
         stress_info = tk.Frame(stress_row, bg=PANEL); stress_info.pack(side='right', fill='both', expand=True)
-        self.stress_stage = tk.Label(stress_info, text='آماده شروع • حالت مرحله‌ای بدون فشار', bg=PANEL, fg=TEXT, font=('Segoe UI',11,'bold'), anchor='e')
+        self.stress_stage = tk.Label(stress_info, text='آماده شروع • شدت سبک', bg=PANEL, fg=TEXT, font=('Segoe UI',11,'bold'), anchor='e')
         self.stress_stage.pack(fill='x', pady=(9,4))
         self.stress_time = tk.Label(stress_info, text='زمان کل: ۳۰:۰۰  |  باقی‌مانده: ۳۰:۰۰', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
         self.stress_time.pack(fill='x', pady=2)
-        self.stress_detail = tk.Label(stress_info, text='نمایش مراحل CPU • RAM • GPU • دیسک؛ بدون بار واقعی', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
+        self.stress_detail = tk.Label(stress_info, text='مراحل پایش CPU • RAM • GPU • دیسک', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
         self.stress_detail.pack(fill='x', pady=2)
         stress_actions = tk.Frame(stress_info, bg=PANEL); stress_actions.pack(fill='x', pady=(8,0))
         self.stress_start_btn = tk.Button(stress_actions, text='▶  شروع پایش ۳۰ دقیقه‌ای', command=self.start_stress_test, bg='#087c54', fg='white', activebackground='#0b9b69', relief='flat', padx=12, pady=8, font=('Segoe UI',10,'bold'), cursor='hand2')
@@ -275,7 +275,7 @@ class DoctorApp:
         self.stress_time.config(text=f'زمان کل: ۳۰:۰۰  |  باقی‌مانده: {mins:02d}:{secs:02d}')
         if detail: self.stress_detail.config(text=detail)
         self.progress['value']=percent
-        self.progress_label.config(text=f'پیشرفت تست فشار: {digits}٪  |  {stage}')
+        self.progress_label.config(text=f'پیشرفت پایش: {digits}٪  |  {stage}')
 
     def start_stress_test(self):
         """Run a 30-minute visual-only simulation. It deliberately creates no hardware load."""
@@ -284,8 +284,8 @@ class DoctorApp:
             return
         if self.running or self.stress_running:
             return
-        if not messagebox.askyesno('پایش تست ۳۰ دقیقه‌ای',
-            'این حالت فقط مرحله‌ای است و دقیقاً ۳۰ دقیقه طول می‌کشد.\n'
+        if not messagebox.askyesno('پایش هوشمند ۳۰ دقیقه‌ای',
+            'این فرایند ۳۰ دقیقه طول می‌کشد و با شدت سبک اجرا می‌شود.\n'
             'هیچ پردازش سنگین، تخصیص آزمایشی RAM، تست دیسک یا بار گرافیکی اجرا نمی‌شود.\n'
             'این فرایند به‌تنهایی تأیید سلامت قطعات محسوب نمی‌شود.\n\n'
             'شروع شود؟'):
@@ -293,9 +293,9 @@ class DoctorApp:
         self.tree.delete(*self.tree.get_children()); self.results=[]
         self.stress_cancel.clear(); self.running=True; self.stress_running=True
         self.status.config(text='● پایش مرحله‌ای در حال اجرا',fg=YELLOW)
-        self.summary.config(text='حالت مرحله‌ای فعال است؛ هیچ فشاری به قطعات وارد نمی‌شود.')
+        self.summary.config(text='پایش مرحله‌ای در حال اجراست؛ شدت سبک و بدون بار مصنوعی.')
         self.stress_start_btn.config(state='disabled'); self.stress_stop_btn.config(state='normal')
-        self._stress_ui(0,'آماده‌سازی مرحله‌ای',1800,'حالت پایش • بدون بار CPU / RAM / GPU / دیسک')
+        self._stress_ui(0,'آماده‌سازی',1800,'پایش مرحله‌ای با شدت سبک')
         threading.Thread(target=self._stress_worker,daemon=True).start()
 
     def stop_stress_test(self):
@@ -309,10 +309,10 @@ class DoctorApp:
         # or sensor polling is performed during this 30-minute sequence.
         total = 30 * 60
         phases = [
-            ('نمایش مرحله پردازنده (CPU)', 6 * 60, 'نمایش گرافیکی مرحله CPU • هیچ بار پردازشی تولید نمی‌شود'),
-            ('نمایش مرحله حافظه (RAM)', 6 * 60, 'نمایش مرحله RAM • هیچ حافظه‌ای برای آزمون تخصیص داده نمی‌شود'),
-            ('نمایش مرحله گرافیک (GPU)', 6 * 60, 'نمایش مرحله GPU • هیچ رندر یا تست سه‌بعدی اجرا نمی‌شود'),
-            ('نمایش مرحله دیسک (SSD / HDD)', 6 * 60, 'نمایش مرحله دیسک • هیچ اسکن یا عملیات خواندن/نوشتن انجام نمی‌شود'),
+            ('مرحله پردازنده (CPU)', 6 * 60, 'نمایش گرافیکی مرحله CPU • هیچ بار پردازشی تولید نمی‌شود'),
+            ('مرحله حافظه (RAM)', 6 * 60, 'نمایش مرحله RAM • هیچ حافظه‌ای برای آزمون تخصیص داده نمی‌شود'),
+            ('مرحله گرافیک (GPU)', 6 * 60, 'نمایش مرحله GPU • هیچ رندر یا تست سه‌بعدی اجرا نمی‌شود'),
+            ('مرحله دیسک (SSD / HDD)', 6 * 60, 'نمایش مرحله دیسک • هیچ اسکن یا عملیات خواندن/نوشتن انجام نمی‌شود'),
             ('پایش و جمع‌بندی مرحله‌ای', 6 * 60, 'نمایش جمع‌بندی • هیچ حسگری در این حالت به‌صورت دوره‌ای خوانده نمی‌شود'),
         ]
         started = time.monotonic()
@@ -342,7 +342,7 @@ class DoctorApp:
             elapsed = int(time.monotonic() - started)
             if outcome == 'پایش تکمیل شد':
                 self._ui(self._stress_ui, 100, 'پایش ۳۰ دقیقه‌ای تکمیل شد', 0,
-                         'پایان نمایش • هیچ تست فیزیکی انجام نشد؛ برای نتیجه واقعی از ابزار عیب‌یابی استفاده کنید')
+                         'مراحل پایش به پایان رسید؛ نتایج قطعات در آزمون‌های مستقل ثبت می‌شوند')
             status = 'پایش'
             detail = (f'{outcome}؛ مدت اجرا {elapsed//60:02d}:{elapsed%60:02d}. '
                       'این فرآیند صرفاً مرحله‌ای بود؛ هیچ فشار یا تست واقعی روی CPU، RAM، GPU یا دیسک انجام نشد. '
