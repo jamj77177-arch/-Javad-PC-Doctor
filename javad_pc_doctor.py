@@ -2,7 +2,8 @@
 """Javad PC Doctor - portable Windows hardware check utility.
 Safe, non-destructive checks. Some sensor/SMART readings depend on Windows and hardware support.
 """
-import os, sys, json, time, platform, socket, threading, subprocess, datetime, tempfile, hashlib
+import os, sys, json, time, platform, socket, threading, subprocess, datetime, tempfile, hashlib, re
+from urllib.request import urlopen
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -62,6 +63,111 @@ def disk_health():
     except Exception: return out
 
 
+
+def _temperature_number(value):
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+        match = re.search(r'-?\d+(?:[.,]\d+)?', str(value))
+        return float(match.group(0).replace(',', '.')) if match else None
+    except Exception:
+        return None
+
+
+def _collect_lhm_temperatures(node, path=None, found=None):
+    """Read temperature nodes from LibreHardwareMonitor's data.json tree."""
+    if path is None: path = []
+    if found is None: found = []
+    if isinstance(node, dict):
+        label = str(node.get('Text') or node.get('Name') or '')
+        current_path = path + ([label] if label else [])
+        raw = node.get('Value')
+        if raw is not None:
+            value = _temperature_number(raw)
+            raw_text = str(raw).lower()
+            if value is not None and ('°c' in raw_text or ' c' in raw_text or
+                                      str(node.get('Type', '')).lower() == 'temperature'):
+                found.append((' / '.join(current_path), value))
+        children = node.get('Children') or []
+        if isinstance(children, list):
+            for child in children:
+                _collect_lhm_temperatures(child, current_path, found)
+    elif isinstance(node, list):
+        for child in node:
+            _collect_lhm_temperatures(child, path, found)
+    return found
+
+
+def _classify_temperature_sensors(items):
+    result = {'CPU': [], 'GPU': [], 'DISK': [], 'BOARD': []}
+    for label, value in items:
+        low = label.lower()
+        if any(k in low for k in ('cpu', 'processor', 'package', 'core ', 'tctl', 'tdie', 'ccd')):
+            bucket = 'CPU'
+        elif any(k in low for k in ('gpu', 'nvidia', 'radeon', 'graphics', 'video')):
+            bucket = 'GPU'
+        elif any(k in low for k in ('nvme', 'ssd', 'hdd', 'disk', 'drive', 'storage')):
+            bucket = 'DISK'
+        elif any(k in low for k in ('motherboard', 'mainboard', 'system', 'chipset', 'pch')):
+            bucket = 'BOARD'
+        else:
+            continue
+        result[bucket].append((label, value))
+    return result
+
+
+def read_hardware_temperatures():
+    """Prefer LibreHardwareMonitor (REST/WMI); use psutil only as a fallback."""
+    raw_items = []
+    source = ''
+    # LibreHardwareMonitor 0.9.5+ exposes the sensor tree through its local web server.
+    try:
+        with urlopen('http://127.0.0.1:8085/data.json', timeout=1.2) as response:
+            tree = json.loads(response.read().decode('utf-8', errors='replace'))
+        raw_items = _collect_lhm_temperatures(tree)
+        if raw_items:
+            source = 'LibreHardwareMonitor'
+    except Exception:
+        pass
+
+    # Older LibreHardwareMonitor/OpenHardwareMonitor versions publish WMI sensors.
+    if not raw_items and os.name == 'nt':
+        command = (
+            "$ErrorActionPreference='Stop'; "
+            "Get-CimInstance -Namespace 'root/LibreHardwareMonitor' -ClassName Sensor | "
+            "Where-Object { $_.SensorType -eq 'Temperature' } | "
+            "Select-Object Name,Identifier,Value | ConvertTo-Json -Compress"
+        )
+        try:
+            output = run_powershell(command, timeout=5)
+            data = json.loads(output) if output else []
+            if isinstance(data, dict): data = [data]
+            for sensor in data:
+                value = _temperature_number(sensor.get('Value'))
+                if value is not None:
+                    raw_items.append((str(sensor.get('Identifier') or sensor.get('Name') or 'Sensor'), value))
+            if raw_items: source = 'LibreHardwareMonitor WMI'
+        except Exception:
+            pass
+
+    if not raw_items and psutil:
+        try:
+            for group, entries in psutil.sensors_temperatures().items():
+                for entry in entries:
+                    if entry.current is not None:
+                        raw_items.append((str(entry.label or group), float(entry.current)))
+            if raw_items: source = 'سیستم‌عامل / psutil'
+        except Exception:
+            pass
+
+    result = _classify_temperature_sensors(raw_items)
+    result['SOURCE'] = source
+    result['AVAILABLE'] = bool(raw_items)
+    return result
+
+
 class DoctorApp:
     def __init__(self, root):
         self.root = root; self.root.title(f'{APP_NAME}  |  نسخه {VERSION}'); self.root.geometry('1280x820'); self.root.minsize(760, 560); self.root.configure(bg=BG)
@@ -72,7 +178,7 @@ class DoctorApp:
             if ico.exists(): self.root.iconbitmap(str(ico))
         except Exception: pass
         self.results = []; self.running = False; self.stress_running = False; self.stress_cancel = threading.Event(); self.info = get_system_info(); self.technician_assessment = 'انتخاب نشده'
-        self._style(); self._build(); self.refresh_info()
+        self._style(); self._build(); self.refresh_info(); self.temp_monitor_stop = threading.Event(); self.root.after(700, self.start_temperature_monitor)
 
     def _style(self):
         s = ttk.Style(); s.theme_use('clam')
@@ -249,6 +355,38 @@ class DoctorApp:
                                        bg='#0d2946', fg=MUTED, font=('Segoe UI', 8), anchor='e')
         self.progress_label.pack(fill='x')
 
+        # Live component temperature strip
+        temp_panel = tk.Frame(center, bg='#0b223a', padx=16, pady=13,
+                               highlightbackground='#245475', highlightthickness=1)
+        temp_panel.pack(fill='x', pady=(0,12))
+        temp_head = tk.Frame(temp_panel, bg='#0b223a')
+        temp_head.pack(fill='x')
+        tk.Label(temp_head, text='دما و حسگرهای سخت‌افزار', bg='#0b223a',
+                 fg='#ffffff', font=('Segoe UI', 12, 'bold')).pack(side='right')
+        self.temp_source_label = tk.Label(temp_head, text='در حال شناسایی حسگرها...',
+                 bg='#0b223a', fg=MUTED, font=('Segoe UI', 8))
+        self.temp_source_label.pack(side='left')
+        temp_grid = tk.Frame(temp_panel, bg='#0b223a')
+        temp_grid.pack(fill='x', pady=(10,0))
+        self.temp_values = {}
+        for key, caption in [('CPU','پردازنده'),('GPU','گرافیک'),('DISK','حافظه'),('BOARD','مادربرد')]:
+            tile = tk.Frame(temp_grid, bg='#123451', padx=12, pady=10,
+                            highlightbackground='#1c4968', highlightthickness=1)
+            tile.pack(side='left', fill='both', expand=True, padx=4)
+            tk.Label(tile, text=caption, bg='#123451', fg=MUTED,
+                     font=('Segoe UI', 9, 'bold')).pack(anchor='center')
+            value = tk.Label(tile, text='-- °C', bg='#123451', fg=CYAN,
+                             font=('Segoe UI', 20 if key == 'CPU' else 17, 'bold'))
+            value.pack(anchor='center', pady=(4,2))
+            detail = tk.Label(tile, text='در انتظار داده سنسور', bg='#123451', fg=MUTED,
+                              font=('Segoe UI', 8), wraplength=170, justify='center')
+            detail.pack(anchor='center')
+            self.temp_values[key] = (value, detail)
+        self.temp_hint = tk.Label(temp_panel,
+            text='برای دریافت دمای دقیق CPU/GPU در ویندوز، LibreHardwareMonitor باید در پس‌زمینه اجرا باشد.',
+            bg='#0b223a', fg=YELLOW, font=('Segoe UI', 8), anchor='e', justify='right')
+        self.temp_hint.pack(fill='x', pady=(9,0))
+
         # Bottom diagnostics, alerts and results
         lower = tk.Frame(center, bg=BG)
         lower.pack(fill='both', expand=True)
@@ -309,6 +447,48 @@ class DoctorApp:
             self.assess_value.config(text='✕ ناپایدار', fg=RED)
             self.assess_unstable_btn.config(relief='sunken', highlightthickness=1, highlightbackground=RED)
             self.assess_stable_btn.config(relief='flat', highlightthickness=0)
+
+    def start_temperature_monitor(self):
+        if getattr(self, '_temperature_thread_started', False):
+            return
+        self._temperature_thread_started = True
+        threading.Thread(target=self._temperature_worker, daemon=True).start()
+
+    def _temperature_worker(self):
+        while not self.temp_monitor_stop.is_set():
+            try:
+                data = read_hardware_temperatures()
+                self._ui(self.update_temperature_cards, data)
+            except Exception:
+                pass
+            self.temp_monitor_stop.wait(3.0)
+
+    def update_temperature_cards(self, data):
+        if not hasattr(self, 'temp_values'):
+            return
+        source = data.get('SOURCE') or ''
+        self.temp_source_label.config(
+            text=('منبع: ' + source) if source else 'منبع سنسور متصل نیست')
+        labels = {'CPU':'پردازنده','GPU':'گرافیک','DISK':'حافظه','BOARD':'مادربرد'}
+        for key, (value_label, detail_label) in self.temp_values.items():
+            readings = data.get(key) or []
+            if readings:
+                values = [v for _, v in readings]
+                hottest = max(values)
+                value_label.config(text=f'{hottest:.1f} °C',
+                                   fg=RED if hottest >= 85 else (YELLOW if hottest >= 75 else CYAN))
+                names = ' • '.join(f'{name.split("/")[-1]}: {temp:.1f}°' for name, temp in readings[:3])
+                detail_label.config(text=names or labels[key])
+            else:
+                value_label.config(text='-- °C', fg=MUTED)
+                detail_label.config(text='سنسور قابل شناسایی نیست')
+        if source:
+            self.temp_hint.config(text='دمای نمایش‌داده‌شده از سنسورهای شناسایی‌شده خوانده می‌شود؛ نبود سنسور به معنی صفر درجه نیست.',
+                                  fg=MUTED)
+        else:
+            self.temp_hint.config(
+                text='برای نمایش دمای واقعی CPU/GPU، LibreHardwareMonitor را اجرا کنید (ترجیحاً با دسترسی Administrator). سپس برنامه اینجا خودکار دماها را می‌خواند.',
+                fg=YELLOW)
 
     def refresh_info(self):
         self.info = get_system_info()
