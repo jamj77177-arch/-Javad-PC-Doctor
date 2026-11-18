@@ -33,24 +33,108 @@ def run_powershell(command, timeout=12):
         return ''
 
 
-def get_system_info():
-    info = {'Computer': socket.gethostname(), 'OS': platform.platform(), 'Architecture': platform.machine(),
-            'Processor': platform.processor() or 'نامشخص', 'Logical CPUs': os.cpu_count() or 'نامشخص'}
-    if psutil:
-        vm = psutil.virtual_memory()
-        info['RAM total'] = f'{vm.total / (1024**3):.1f} GB'
-        info['RAM available'] = f'{vm.available / (1024**3):.1f} GB'
-        info['Boot time'] = datetime.datetime.fromtimestamp(psutil.boot_time()).strftime('%Y-%m-%d %H:%M')
+def _as_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def get_hardware_inventory():
+    """Read hardware identity/capacity from Windows CIM. Missing fields stay explicitly unavailable."""
+    info = {'CPU details': 'شناسایی نشد', 'RAM modules': 'شناسایی نشد',
+            'GPU details': 'شناسایی نشد', 'Physical disks': 'شناسایی نشد',
+            'Motherboard details': 'شناسایی نشد', 'BIOS': 'شناسایی نشد',
+            'Windows disk health': 'قابل دریافت نیست'}
+    if os.name != 'nt':
+        return info
+    ps = r"""
+$ErrorActionPreference='SilentlyContinue'
+$cpu=Get-CimInstance Win32_Processor | Select-Object Name,Manufacturer,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,L2CacheSize,L3CacheSize
+$ram=Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,PartNumber,Capacity,Speed,ConfiguredClockSpeed,SMBIOSMemoryType,DeviceLocator
+$gpu=Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor,CurrentHorizontalResolution,CurrentVerticalResolution
+$disk=Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,InterfaceType,MediaType,FirmwareRevision,Status
+$board=Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product,Version
+$bios=Get-CimInstance Win32_BIOS | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate
+$health=Get-PhysicalDisk | Select-Object FriendlyName,HealthStatus,OperationalStatus,MediaType,Size
+$result=@{CPU=@($cpu);RAM=@($ram);GPU=@($gpu);Disks=@($disk);Board=@($board);BIOS=@($bios);DiskHealth=@($health)}
+$result | ConvertTo-Json -Depth 5 -Compress
+"""
     try:
-        gpu = run_powershell("Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name")
-        info['GPU'] = gpu.replace('\n', ' | ') if gpu else 'قابل شناسایی نبود'
-        disks = run_powershell("Get-CimInstance Win32_DiskDrive | ForEach-Object { $_.Model + ' (' + [math]::Round($_.Size/1GB) + ' GB)' }")
-        info['Drives'] = disks.replace('\n', ' | ') if disks else 'قابل شناسایی نبود'
-        board = run_powershell("(Get-CimInstance Win32_BaseBoard | Select-Object -First 1 -ExpandProperty Product)")
-        info['Motherboard'] = board or 'نامشخص'
-    except Exception: pass
+        raw = run_powershell(ps, timeout=18)
+        data = json.loads(raw) if raw else {}
+        cpus = _as_list(data.get('CPU'))
+        if cpus:
+            parts = []
+            for c in cpus:
+                parts.append("{} | {} هسته / {} رشته | فرکانس پایه {} MHz | کش L2={} KB / L3={} KB".format(
+                    c.get('Name') or 'مدل نامشخص', c.get('NumberOfCores') or '?',
+                    c.get('NumberOfLogicalProcessors') or '?', c.get('MaxClockSpeed') or '?',
+                    c.get('L2CacheSize') or '?', c.get('L3CacheSize') or '?'))
+            info['CPU details'] = ' ؛ '.join(parts)
+        modules = _as_list(data.get('RAM'))
+        if modules:
+            parts = []
+            for m in modules:
+                cap = m.get('Capacity')
+                cap_text = f"{int(cap)/(1024**3):.1f} GB" if cap else 'ظرفیت نامشخص'
+                speed = m.get('ConfiguredClockSpeed') or m.get('Speed') or 'نامشخص'
+                maker = (m.get('Manufacturer') or '').strip() or 'سازنده نامشخص'
+                part = (m.get('PartNumber') or '').strip() or 'شماره قطعه نامشخص'
+                slot = m.get('DeviceLocator') or 'اسلات نامشخص'
+                parts.append(f"{slot}: {cap_text} | {speed} MHz | {maker} | {part}")
+            info['RAM modules'] = ' ؛ '.join(parts)
+        gpus = _as_list(data.get('GPU'))
+        if gpus:
+            parts = []
+            for g in gpus:
+                mem = g.get('AdapterRAM')
+                mem_text = f"{int(mem)/(1024**3):.1f} GB" if mem else 'حافظه اختصاصی از ویندوز گزارش نشد'
+                parts.append(f"{g.get('Name') or 'مدل نامشخص'} | VRAM گزارش‌شده: {mem_text} | درایور: {g.get('DriverVersion') or 'نامشخص'} | پردازنده: {g.get('VideoProcessor') or 'نامشخص'}")
+            info['GPU details'] = ' ؛ '.join(parts)
+        disks = _as_list(data.get('Disks'))
+        if disks:
+            parts = []
+            for d in disks:
+                size = d.get('Size')
+                size_text = f"{int(size)/(1024**3):.0f} GB" if size else 'ظرفیت نامشخص'
+                parts.append(f"{d.get('Model') or 'مدل نامشخص'} | {size_text} | رابط: {d.get('InterfaceType') or 'نامشخص'} | نوع گزارش‌شده: {d.get('MediaType') or 'نامشخص'} | وضعیت CIM: {d.get('Status') or 'نامشخص'}")
+            info['Physical disks'] = ' ؛ '.join(parts)
+        boards = _as_list(data.get('Board'))
+        if boards:
+            b = boards[0]
+            info['Motherboard details'] = f"{b.get('Manufacturer') or 'سازنده نامشخص'} | {b.get('Product') or 'مدل نامشخص'} | نسخه: {b.get('Version') or 'نامشخص'}"
+        bioses = _as_list(data.get('BIOS'))
+        if bioses:
+            b = bioses[0]
+            info['BIOS'] = f"{b.get('Manufacturer') or 'سازنده نامشخص'} | {b.get('SMBIOSBIOSVersion') or 'نسخه نامشخص'} | تاریخ: {b.get('ReleaseDate') or 'نامشخص'}"
+        health = _as_list(data.get('DiskHealth'))
+        if health:
+            info['Windows disk health'] = ' ؛ '.join(
+                f"{d.get('FriendlyName') or 'Disk'}: سلامت ویندوز={d.get('HealthStatus') or 'نامشخص'}، وضعیت={d.get('OperationalStatus') or 'نامشخص'}، نوع={d.get('MediaType') or 'نامشخص'}"
+                for d in health)
+    except Exception as exc:
+        info['Inventory note'] = f'خواندن جزئیات CIM ناموفق بود: {exc}'
     return info
 
+
+def get_system_info():
+    info = {'Computer': socket.gethostname(), 'OS': platform.platform(),
+            'Architecture': platform.machine(), 'Processor': platform.processor() or 'شناسایی نشد',
+            'Logical CPUs': os.cpu_count() or 'شناسایی نشد'}
+    if psutil:
+        try:
+            vm = psutil.virtual_memory()
+            info['RAM total'] = f'{vm.total / (1024**3):.1f} GB'
+            info['RAM available'] = f'{vm.available / (1024**3):.1f} GB'
+            info['Boot time'] = datetime.datetime.fromtimestamp(psutil.boot_time()).strftime('%Y-%m-%d %H:%M')
+        except Exception:
+            info['RAM total'] = 'شناسایی نشد'
+    inventory = get_hardware_inventory()
+    info.update(inventory)
+    info['GPU'] = info.get('GPU details', 'شناسایی نشد')
+    info['Drives'] = info.get('Physical disks', 'شناسایی نشد')
+    info['Motherboard'] = info.get('Motherboard details', 'شناسایی نشد')
+    return info
 
 def disk_health():
     # Windows reports a coarse health status; not a full SMART surface scan.
@@ -559,8 +643,10 @@ class DoctorApp:
         if 'قابل دریافت نبود' in health: status='نیازمند بررسی'
         return status, health.replace('\n',' | ')
     def test_gpu(self):
-        gpu=self.info.get('GPU','قابل شناسایی نبود')
-        return ('سالم' if gpu!='قابل شناسایی نبود' else 'نیازمند بررسی', f"کارت گرافیک شناسایی‌شده: {gpu}. تست بار سه‌بعدی/VRAM در این نسخه اجرا نمی‌شود.")
+        gpu=self.info.get('GPU details','شناسایی نشد')
+        if not gpu or gpu == 'شناسایی نشد':
+            return 'نیازمند بررسی', 'مدل GPU از ویندوز قابل شناسایی نبود؛ سلامت کارت گرافیک قابل نتیجه‌گیری نیست.'
+        return 'اطلاعات خوانده شد', f"مشخصات گزارش‌شده GPU: {gpu}. این نسخه تست عملکرد سه‌بعدی یا VRAM اجرا نمی‌کند؛ شناسایی مدل به معنی تأیید سلامت نیست."
     def _stress_ui(self, percent, stage, remaining, detail=''):
         percent=max(0,min(100,int(percent)))
         digits=str(percent).translate(str.maketrans('0123456789','۰۱۲۳۴۵۶۷۸۹'))
@@ -659,16 +745,24 @@ class DoctorApp:
                             'پایش پایان یافت • نتایج آزمون‌های مستقل در جدول ثبت می‌شوند')
 
     def show_sensors(self):
-        if psutil:
-            try:
-                ts=psutil.sensors_temperatures()
-                lines=[]
-                for name,arr in ts.items():
-                    for v in arr: lines.append(f'{name} / {v.label or "Sensor"}: {v.current}°C')
-                if lines: messagebox.showinfo('دما و سنسورها','\n'.join(lines))
-                else: messagebox.showinfo('دما و سنسورها','ویندوز/سخت‌افزار دما را از طریق psutil در دسترس قرار نداده است. برای نمایش مطمئن‌تر، LibreHardwareMonitor را کنار برنامه قرار دهید؛ این نسخه هنوز اتصال مستقیم به آن را ندارد.')
-            except Exception: messagebox.showinfo('دما و سنسورها','خواندن سنسورهای دما توسط این سیستم پشتیبانی نشد.')
-        else: messagebox.showinfo('دما و سنسورها','کتابخانه لازم نصب نیست.')
+        try:
+            sensors = read_hardware_temperatures()
+            lines = []
+            labels = {'CPU':'پردازنده','GPU':'گرافیک','DISK':'دیسک','BOARD':'مادربرد'}
+            for key, title in labels.items():
+                values = sensors.get(key, [])
+                if values:
+                    lines.append(f'[{title}]')
+                    lines.extend(f'{name}: {value:.1f}°C' for name, value in values)
+                else:
+                    lines.append(f'[{title}] شناسایی نشد')
+            source = sensors.get('SOURCE') or 'منبع سنسور در دسترس نیست'
+            lines.append('')
+            lines.append('منبع داده: ' + source)
+            lines.append('دمای ناموجود حدس زده نمی‌شود. سرعت فن در این نسخه هنوز از همه سخت‌افزارها قابل خواندن نیست.')
+            messagebox.showinfo('دما و سنسورها', '\\n'.join(lines))
+        except Exception as exc:
+            messagebox.showinfo('دما و سنسورها', f'خواندن سنسورها ناموفق بود: {exc}\\nدمای ناموجود حدس زده نمی‌شود.')
     def save_report(self):
         self.refresh_info()
         stamp=datetime.datetime.now().strftime('%Y%m%d_%H%M%S'); name=f"Report_{self.info.get('Computer','PC')}_{stamp}.txt".replace(' ','_')
