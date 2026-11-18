@@ -444,21 +444,41 @@ class DoctorApp:
 
     def refresh_info(self):
         self.info = get_system_info()
-        if hasattr(self, 'metric_values'):
-            try:
-                cpu = f"{psutil.cpu_percent(interval=None):.0f}٪ مصرف لحظه‌ای" if psutil else 'اطلاعات در دسترس نیست'
-            except Exception:
-                cpu = 'اطلاعات در دسترس نیست'
-            try:
-                ram = f"{psutil.virtual_memory().percent:.0f}٪ مصرف شده" if psutil else self.info.get('RAM total','نامشخص')
-            except Exception:
-                ram = self.info.get('RAM total','نامشخص')
-            gpu = self.info.get('GPU','قابل شناسایی نبود')
-            disk = self.info.get('Drives','قابل شناسایی نبود')
-            self.metric_values['CPU'].config(text=cpu)
-            self.metric_values['RAM'].config(text=ram)
-            self.metric_values['GPU'].config(text=gpu)
-            self.metric_values['DISK'].config(text=disk)
+        if not hasattr(self, 'metric_values'):
+            return
+        try:
+            cpu_pct = float(psutil.cpu_percent(interval=None)) if psutil else None
+        except Exception:
+            cpu_pct = None
+        try:
+            vm = psutil.virtual_memory() if psutil else None
+            ram_pct = float(vm.percent) if vm else None
+            ram_text = f"{vm.used / (1024**3):.1f} / {vm.total / (1024**3):.1f} GB" if vm else self.info.get('RAM total','نامشخص')
+        except Exception:
+            ram_pct, ram_text = None, self.info.get('RAM total','نامشخص')
+        try:
+            root_path = os.environ.get('SystemDrive', 'C:') + os.sep
+            du = psutil.disk_usage(root_path) if psutil else None
+            disk_pct = float(du.percent) if du else None
+            disk_text = f"{du.used / (1024**3):.0f} / {du.total / (1024**3):.0f} GB" if du else self.info.get('Drives','قابل شناسایی نبود')
+        except Exception:
+            disk_pct, disk_text = None, self.info.get('Drives','قابل شناسایی نبود')
+        gpu = self.info.get('GPU','قابل شناسایی نبود')
+        values = {
+            'CPU': (f"{cpu_pct:.0f}٪" if cpu_pct is not None else 'نامشخص',
+                    'مصرف لحظه‌ای پردازنده'),
+            'RAM': (f"{ram_pct:.0f}٪" if ram_pct is not None else 'نامشخص',
+                    ram_text),
+            'GPU': (gpu, 'نام و مدل شناسایی‌شده؛ درصد بار در دسترس نیست'),
+            'DISK': (f"{disk_pct:.0f}٪ اشغال" if disk_pct is not None else 'نامشخص',
+                     disk_text)
+        }
+        for key, (value, detail) in values.items():
+            self.metric_values[key].config(text=value)
+            self.metric_details[key].config(text=detail)
+        for key, pct in [('CPU',cpu_pct),('RAM',ram_pct),('DISK',disk_pct)]:
+            self.metric_bars[key]['value'] = pct if pct is not None else 0
+        self.metric_bars['GPU']['value'] = 0
     def add_result(self, test, status, detail):
         tag = 'ok' if status == 'سالم' else ('bad' if status == 'خطا' else 'warn')
         self.tree.insert('', 'end', values=(test,status,detail), tags=(tag,))
