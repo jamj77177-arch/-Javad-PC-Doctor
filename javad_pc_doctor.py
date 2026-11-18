@@ -113,6 +113,22 @@ class DoctorApp:
         tk.Label(left, text='شدت پیش‌فرض: سبک\nپایش بدون ایجاد بار مصنوعی روی قطعات.', justify='left', bg=BG, fg=MUTED, font=('Segoe UI', 9)).pack(anchor='w', pady=18)
 
         center = tk.Frame(body, bg=BG); center.pack(side='left', fill='both', expand=True)
+        # Hardware overview cards: values are read from the host, never fabricated.
+        cards = tk.Frame(center, bg=BG); cards.pack(fill='x', pady=(0,12))
+        self.metric_values = {}
+        metric_specs = [
+            ('CPU', 'پردازنده', 'در حال خواندن...'),
+            ('RAM', 'حافظه RAM', 'در حال خواندن...'),
+            ('GPU', 'کارت گرافیک', 'در حال خواندن...'),
+            ('DISK', 'حافظه ذخیره‌سازی', 'در حال خواندن...'),
+        ]
+        for key, caption, initial in metric_specs:
+            card = tk.Frame(cards, bg=PANEL, highlightbackground='#244966', highlightthickness=1)
+            card.pack(side='left', fill='both', expand=True, padx=4)
+            tk.Label(card, text=caption, bg=PANEL, fg=CYAN, font=('Segoe UI',10,'bold')).pack(anchor='e', padx=9, pady=(9,3))
+            value = tk.Label(card, text=initial, bg=PANEL, fg=TEXT, font=('Segoe UI',9,'bold'), wraplength=150, justify='right')
+            value.pack(fill='x', padx=9, pady=(2,10))
+            self.metric_values[key] = value
         self._panel_title(center, 'وضعیت سیستم')
         # Technician-only initial assessment. This is kept separate from measured hardware results.
         assess = tk.Frame(center, bg=PANEL, highlightbackground='#244966', highlightthickness=1)
@@ -136,13 +152,13 @@ class DoctorApp:
         stress.pack(fill='x', pady=(8,12))
         tk.Label(stress, text='پایش هوشمند تست ۳۰ دقیقه‌ای', bg=PANEL, fg=CYAN, font=('Segoe UI', 13, 'bold')).pack(anchor='e', padx=14, pady=(9,2))
         stress_row = tk.Frame(stress, bg=PANEL); stress_row.pack(fill='x', padx=12, pady=(2,10))
-        self.stress_gauge = tk.Canvas(stress_row, width=116, height=116, bg=PANEL, highlightthickness=0)
-        self.stress_gauge.pack(side='right', padx=(12,4))
-        self.stress_gauge.create_oval(9,9,107,107, outline='#244966', width=10)
-        self.stress_arc = self.stress_gauge.create_arc(9,9,107,107,start=90,extent=0,style='arc',outline=CYAN,width=10)
-        self.stress_pct = self.stress_gauge.create_text(58,53,text='۰٪',fill=TEXT,font=('Segoe UI',18,'bold'))
-        self.stress_gauge.create_text(58,76,text='پیشرفت',fill=MUTED,font=('Segoe UI',8))
-        stress_info = tk.Frame(stress_row, bg=PANEL); stress_info.pack(side='right', fill='both', expand=True)
+        stress_info = tk.Frame(stress_row, bg=PANEL); stress_info.pack(fill='both', expand=True, padx=8)
+        progress_head = tk.Frame(stress_info, bg=PANEL); progress_head.pack(fill='x', pady=(8,5))
+        self.stress_pct = tk.Label(progress_head, text='۰٪', bg=PANEL, fg=CYAN, font=('Segoe UI',26,'bold'))
+        self.stress_pct.pack(side='right')
+        tk.Label(progress_head, text='درصد پیشرفت پایش', bg=PANEL, fg=MUTED, font=('Segoe UI',9)).pack(side='right', padx=12, pady=(9,0))
+        self.stress_bar = ttk.Progressbar(stress_info, mode='determinate', maximum=100)
+        self.stress_bar.pack(fill='x', pady=(2,10))
         self.stress_stage = tk.Label(stress_info, text='آماده شروع • شدت سبک', bg=PANEL, fg=TEXT, font=('Segoe UI',11,'bold'), anchor='e')
         self.stress_stage.pack(fill='x', pady=(9,4))
         self.stress_time = tk.Label(stress_info, text='زمان کل: ۳۰:۰۰  |  باقی‌مانده: ۳۰:۰۰', bg=PANEL, fg=MUTED, font=('Segoe UI',9), anchor='e')
@@ -183,6 +199,21 @@ class DoctorApp:
 
     def refresh_info(self):
         self.info = get_system_info()
+        if hasattr(self, 'metric_values'):
+            try:
+                cpu = f"{psutil.cpu_percent(interval=None):.0f}٪ مصرف لحظه‌ای" if psutil else 'اطلاعات در دسترس نیست'
+            except Exception:
+                cpu = 'اطلاعات در دسترس نیست'
+            try:
+                ram = f"{psutil.virtual_memory().percent:.0f}٪ مصرف شده" if psutil else self.info.get('RAM total','نامشخص')
+            except Exception:
+                ram = self.info.get('RAM total','نامشخص')
+            gpu = self.info.get('GPU','قابل شناسایی نبود')
+            disk = self.info.get('Drives','قابل شناسایی نبود')
+            self.metric_values['CPU'].config(text=cpu)
+            self.metric_values['RAM'].config(text=ram)
+            self.metric_values['GPU'].config(text=gpu)
+            self.metric_values['DISK'].config(text=disk)
     def add_result(self, test, status, detail):
         tag = 'ok' if status == 'سالم' else ('bad' if status == 'خطا' else 'warn')
         self.tree.insert('', 'end', values=(test,status,detail), tags=(tag,))
@@ -268,8 +299,8 @@ class DoctorApp:
     def _stress_ui(self, percent, stage, remaining, detail=''):
         percent=max(0,min(100,int(percent)))
         digits=str(percent).translate(str.maketrans('0123456789','۰۱۲۳۴۵۶۷۸۹'))
-        self.stress_gauge.itemconfigure(self.stress_arc, extent=-3.6*percent)
-        self.stress_gauge.itemconfigure(self.stress_pct, text=digits+'٪')
+        self.stress_pct.config(text=digits+'٪')
+        self.stress_bar['value'] = percent
         mins,secs=divmod(max(0,int(remaining)),60)
         self.stress_stage.config(text=stage)
         self.stress_time.config(text=f'زمان کل: ۳۰:۰۰  |  باقی‌مانده: {mins:02d}:{secs:02d}')
