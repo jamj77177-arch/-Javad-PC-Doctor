@@ -638,10 +638,11 @@ class DoctorApp:
         except Exception as exc:
             return 'نیازمند بررسی', f'خواندن اطلاعات RAM ممکن نشد: {exc}. هیچ تست فشاری اجرا نشد.'
     def test_disk(self):
-        health=disk_health();
-        status='سالم' if ('Healthy' in health or 'خوب' in health) else 'نیازمند بررسی'
-        if 'قابل دریافت نبود' in health: status='نیازمند بررسی'
-        return status, health.replace('\n',' | ')
+        health=disk_health()
+        status='گزارش ویندوز دریافت شد' if ('Healthy' in health or 'خوب' in health) else 'نیازمند بررسی'
+        if 'قابل دریافت نبود' in health:
+            status='نیازمند بررسی'
+        return status, health.replace('\\n',' | ') + ' | این گزارش معادل آزمون کامل SMART یا اسکن سطح دیسک نیست.'
     def test_gpu(self):
         gpu=self.info.get('GPU details','شناسایی نشد')
         if not gpu or gpu == 'شناسایی نشد':
@@ -756,13 +757,21 @@ class DoctorApp:
                     lines.extend(f'{name}: {value:.1f}°C' for name, value in values)
                 else:
                     lines.append(f'[{title}] شناسایی نشد')
-            source = sensors.get('SOURCE') or 'منبع سنسور در دسترس نیست'
             lines.append('')
-            lines.append('منبع داده: ' + source)
-            lines.append('دمای ناموجود حدس زده نمی‌شود. سرعت فن در این نسخه هنوز از همه سخت‌افزارها قابل خواندن نیست.')
-            messagebox.showinfo('دما و سنسورها', '\\n'.join(lines))
+            lines.append('منبع دما: ' + (sensors.get('SOURCE') or 'در دسترس نیست'))
+            lines.append('')
+            lines.append('=== مشخصات شناسایی‌شده سخت‌افزار ===')
+            inventory = get_system_info()
+            for key, title in [('CPU details','پردازنده'),('RAM modules','ماژول‌های RAM'),
+                               ('GPU details','کارت گرافیک'),('Physical disks','دیسک‌های فیزیکی'),
+                               ('Windows disk health','گزارش سلامت دیسک ویندوز'),
+                               ('Motherboard details','مادربرد'),('BIOS','BIOS')]:
+                lines.append(f'{title}: {inventory.get(key) or "شناسایی نشد"}')
+            lines.append('')
+            lines.append('دمای ناموجود حدس زده نمی‌شود. گزارش سلامت دیسک، گزارش ویندوز است و جایگزین آزمون کامل SMART نیست. سرعت فن در این نسخه هنوز از همه سخت‌افزارها قابل خواندن نیست.')
+            messagebox.showinfo('مشخصات سخت‌افزار و سنسورها', '\\n'.join(lines))
         except Exception as exc:
-            messagebox.showinfo('دما و سنسورها', f'خواندن سنسورها ناموفق بود: {exc}\\nدمای ناموجود حدس زده نمی‌شود.')
+            messagebox.showinfo('دما و سنسورها', f'خواندن اطلاعات ناموفق بود: {exc}\\nدمای ناموجود حدس زده نمی‌شود.')
     def save_report(self):
         self.refresh_info()
         stamp=datetime.datetime.now().strftime('%Y%m%d_%H%M%S'); name=f"Report_{self.info.get('Computer','PC')}_{stamp}.txt".replace(' ','_')
