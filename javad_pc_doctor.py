@@ -348,8 +348,8 @@ class DoctorApp:
         self.status.config(text='● '+outcome,fg=YELLOW)
         self.summary.config(text='شبیه‌سازی پایان یافت؛ نتیجه نمایشی است و سلامت واقعی قطعات را نشان نمی‌دهد.')
         if outcome == 'شبیه‌سازی تکمیل شد':
-            self._stress_ui(100, 'شبیه‌سازی تکمیل شد', 0,
-                            'گزارش نمایشی آماده است • برای تشخیص واقعی، تست مستقل قطعات لازم است')
+            self._stress_ui(100, 'پایش تکمیل شد', 0,
+                            'پایش پایان یافت • نتایج آزمون‌های مستقل در جدول ثبت می‌شوند')
 
     def show_sensors(self):
         if psutil:
