@@ -188,318 +188,201 @@ class DoctorApp:
         s.map('Treeview', background=[('selected', '#155477')])
 
     def _build(self):
-        # Rebuilt dashboard based on the approved neon-blue hospital monitoring concept.
-        self.root.configure(bg='#030d1b')
-        self.root.option_add('*Font', ('Segoe UI', 10))
+        # Compact, single-screen neon dashboard. No page-level scrolling.
+        C = {
+            'bg':'#050d1a', 'header':'#081a2d', 'panel':'#0b2037',
+            'panel2':'#102b46', 'edge':'#164766', 'cyan':'#19d9f2',
+            'blue':'#168bd0', 'white':'#eff8ff', 'muted':'#91abc2',
+            'green':'#20d69a', 'amber':'#ffbf52', 'red':'#ff6175',
+            'track':'#18334d'
+        }
+        self.ui_colors = C
+        self.root.configure(bg=C['bg'])
+        self.root.option_add('*Font', ('Segoe UI', 9))
         self.root.title(f'{APP_NAME} | نسخه {VERSION}')
-        self.root.geometry('1536x960')
-        self.root.minsize(1080, 720)
+        self.root.geometry('1440x900')
+        self.root.minsize(1024, 680)
+        try: self.root.state('zoomed')
+        except Exception: pass
 
-        BG0 = '#030d1b'; BG1 = '#06172b'; PANEL = '#08213d'
-        PANEL2 = '#0b2b4c'; EDGE = '#075b91'; CYAN2 = '#00cfff'
-        WHITE = '#f1f8ff'; SUB = '#9dbbd4'; GREEN2 = '#00d58a'
-        AMBER = '#ffbf36'; RED2 = '#ff5368'
+        style = ttk.Style()
+        try: style.theme_use('clam')
+        except Exception: pass
+        style.configure('TProgressbar', troughcolor=C['track'], background=C['cyan'],
+                        bordercolor=C['track'], lightcolor=C['cyan'], darkcolor=C['cyan'])
+        style.configure('Treeview', background='#081a2d', foreground=C['white'],
+                        fieldbackground='#081a2d', rowheight=23, borderwidth=0,
+                        font=('Segoe UI', 8))
+        style.configure('Treeview.Heading', background='#123653', foreground=C['cyan'],
+                        font=('Segoe UI', 8, 'bold'), relief='flat')
+        style.map('Treeview', background=[('selected','#155477')],
+                  foreground=[('selected',C['white'])])
 
-        # Header / hospital identity
-        header = tk.Frame(self.root, bg='#04172c', height=104,
-                          highlightbackground='#075b91', highlightthickness=1)
-        header.pack(fill='x', side='top')
-        header.pack_propagate(False)
-        brand_left = tk.Frame(header, bg='#04172c')
-        brand_left.pack(side='left', padx=22, pady=13)
-        tk.Label(brand_left, text='▣  JPD', bg='#04172c', fg=CYAN2,
-                 font=('Segoe UI', 22, 'bold')).pack(anchor='w')
-        tk.Label(brand_left, text='سلامت سیستم، آرامش شما', bg='#04172c',
-                 fg=SUB, font=('Segoe UI', 9)).pack(anchor='w')
-        brand = tk.Frame(header, bg='#04172c')
-        brand.pack(side='right', padx=30, pady=12)
-        tk.Label(brand, text='✚  بیمارستان آیت‌الله روحانی', bg='#04172c',
-                 fg=WHITE, font=('Segoe UI', 22, 'bold')).pack(anchor='e')
-        tk.Label(brand, text=f'JAVAD PC DOCTOR  •  نسخه {VERSION}  |  سامانه بررسی و پایش سخت‌افزار',
-                 bg='#04172c', fg=CYAN2, font=('Segoe UI', 9, 'bold')).pack(anchor='e', pady=(3,0))
-        self.status = tk.Label(header, text='● آماده بررسی', bg='#04172c',
-                               fg=GREEN2, font=('Segoe UI', 10, 'bold'))
-        self.status.pack(side='left', padx=28)
+        def panel(parent, bg=None, padx=12, pady=10):
+            return tk.Frame(parent, bg=bg or C['panel'], padx=padx, pady=pady,
+                            highlightbackground=C['edge'], highlightthickness=1)
+        def label(parent, text, size=9, color=None, bold=False, **kw):
+            return tk.Label(parent, text=text, bg=kw.pop('bg', C['panel']),
+                            fg=color or C['white'],
+                            font=('Segoe UI', size, 'bold' if bold else 'normal'), **kw)
+        def section(parent, title, hint=None):
+            h=tk.Frame(parent,bg=C['panel']); h.pack(fill='x',pady=(0,7))
+            label(h,title,10,C['white'],True).pack(side='right')
+            if hint: label(h,hint,8,C['muted']).pack(side='left')
+            return h
+        def action(parent, text, command, color, fg='white', **kw):
+            return tk.Button(parent,text=text,command=command,bg=color,fg=fg,
+                activebackground=color,activeforeground=fg,relief='flat',bd=0,
+                padx=10,pady=7,font=('Segoe UI',8,'bold'),cursor='hand2',**kw)
 
-        shell = tk.Frame(self.root, bg=BG0)
-        shell.pack(fill='both', expand=True)
-        canvas = tk.Canvas(shell, bg=BG0, highlightthickness=0, bd=0)
-        scrollbar = ttk.Scrollbar(shell, orient='vertical', command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side='right', fill='y')
-        canvas.pack(side='left', fill='both', expand=True)
-        body = tk.Frame(canvas, bg=BG0, padx=14, pady=14)
-        window_id = canvas.create_window((0,0), window=body, anchor='nw')
-        body.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>', lambda e: canvas.itemconfigure(window_id, width=e.width))
-        canvas.bind_all('<MouseWheel>', lambda e: canvas.yview_scroll(int(-e.delta/120), 'units'))
+        # Header
+        header=tk.Frame(self.root,bg=C['header'],height=68,
+                        highlightbackground=C['edge'],highlightthickness=1)
+        header.pack(side='top',fill='x'); header.pack_propagate(False)
+        brand=tk.Frame(header,bg=C['header']); brand.pack(side='left',padx=20,pady=8)
+        label(brand,'JPD  ◈',21,C['cyan'],True,bg=C['header']).pack(anchor='w')
+        label(brand,'HARDWARE DIAGNOSTIC CENTER',7,C['muted'],True,bg=C['header']).pack(anchor='w')
+        hospital=tk.Frame(header,bg=C['header']); hospital.pack(side='right',padx=22,pady=8)
+        label(hospital,'✚  بیمارستان آیت‌الله روحانی',17,C['white'],True,bg=C['header']).pack(anchor='e')
+        label(hospital,f'JAVAD PC DOCTOR  •  نسخه {VERSION}  |  سامانه هوشمند پایش سخت‌افزار',8,C['cyan'],True,bg=C['header']).pack(anchor='e')
+        self.status=label(header,'● آماده بررسی',9,C['green'],True,bg=C['header'])
+        self.status.pack(side='left',padx=22)
 
-        # Navigation rail
-        nav = tk.Frame(body, bg='#061b32', width=190, padx=12, pady=15,
-                       highlightbackground=EDGE, highlightthickness=1)
-        nav.pack(side='left', fill='y', padx=(0,12))
-        nav.pack_propagate(False)
-        tk.Label(nav, text='JPD', bg='#061b32', fg=CYAN2,
-                 font=('Segoe UI', 27, 'bold')).pack(anchor='center', pady=(2,0))
-        tk.Label(nav, text='CONTROL CENTER', bg='#061b32', fg=SUB,
-                 font=('Segoe UI', 8, 'bold')).pack(anchor='center', pady=(0,18))
-        tk.Label(nav, text='منوی اصلی', bg='#061b32', fg=WHITE,
-                 font=('Segoe UI', 11, 'bold')).pack(anchor='e', padx=8, pady=(0,8))
+        # Main shell: fixed navigation rail + dashboard workspace.
+        shell=tk.Frame(self.root,bg=C['bg']); shell.pack(fill='both',expand=True,padx=10,pady=9)
+        nav=tk.Frame(shell,bg='#07182a',width=174,padx=10,pady=12,
+                     highlightbackground=C['edge'],highlightthickness=1)
+        nav.pack(side='left',fill='y',padx=(0,10)); nav.pack_propagate(False)
+        label(nav,'JPD',25,C['cyan'],True,bg='#07182a').pack(pady=(2,0))
+        label(nav,'CONTROL PANEL',7,C['muted'],True,bg='#07182a').pack(pady=(0,14))
+        label(nav,'ناوبری اصلی',9,C['muted'],True,bg='#07182a').pack(anchor='e',padx=5,pady=(0,5))
+        def nav_button(text, command, active=False, accent=None):
+            b=action(nav,text,command,'#123d5c' if active else '#0b2944',accent or (C['cyan'] if active else C['white']))
+            b.pack(fill='x',pady=3); return b
+        nav_button('⌂   داشبورد',self.refresh_info,True)
+        nav_button('◉   پایش هوشمند',self.start_stress_test)
+        nav_button('▦   تست کامل قطعات',self.start_full)
+        nav_button('▣   پردازنده CPU',lambda:self.start_one('CPU'))
+        nav_button('▤   حافظه RAM',lambda:self.start_one('RAM'))
+        nav_button('◈   کارت گرافیک',lambda:self.start_one('GPU'))
+        nav_button('▱   حافظه دیسک',lambda:self.start_one('DISK'))
+        nav_button('♨   دما و سنسورها',self.show_sensors,accent=C['amber'])
+        nav_button('▤   گزارش‌ها',self.open_reports)
+        nav_button('⇩   ذخیره گزارش',self.save_report,accent=C['cyan'])
+        tk.Frame(nav,bg=C['edge'],height=1).pack(fill='x',pady=10)
+        label(nav,'ارزیابی اولیه تکنسین',9,C['cyan'],True,bg='#07182a').pack(anchor='e',padx=4)
+        self.assess_value=label(nav,'هنوز انتخاب نشده',8,C['muted'],bg='#07182a')
+        self.assess_value.pack(anchor='e',padx=4,pady=(5,7))
+        assess=tk.Frame(nav,bg='#07182a'); assess.pack(fill='x')
+        self.assess_stable_btn=action(assess,'✓ پایدار',lambda:self.set_assessment('پایدار'),'#07583f')
+        self.assess_stable_btn.pack(side='right',expand=True,fill='x',padx=(2,0))
+        self.assess_unstable_btn=action(assess,'✕ ناپایدار',lambda:self.set_assessment('ناپایدار'),'#682c3c')
+        self.assess_unstable_btn.pack(side='left',expand=True,fill='x',padx=(0,2))
+        label(nav,'شدت پیش‌فرض پایش: سبک',7,C['muted'],bg='#07182a').pack(side='bottom',pady=5)
 
-        def nav_button(label, command, accent=WHITE, active=False):
-            color = '#063e68' if active else '#0a2948'
-            b = tk.Button(nav, text=label, command=command, bg=color, fg=accent,
-                          activebackground='#07527c', activeforeground='white',
-                          relief='flat', bd=0, anchor='e', padx=11, pady=12,
-                          font=('Segoe UI', 10, 'bold'), cursor='hand2',
-                          highlightthickness=1, highlightbackground=('#078ac0' if active else '#123b5d'))
-            b.pack(fill='x', pady=4)
-            return b
+        center=tk.Frame(shell,bg=C['bg']); center.pack(side='left',fill='both',expand=True)
+        titlebar=tk.Frame(center,bg=C['bg']); titlebar.pack(fill='x',pady=(0,7))
+        label(titlebar,'داشبورد سلامت و عملکرد سیستم',15,C['white'],True,bg=C['bg']).pack(side='right')
+        label(titlebar,'● LIVE HARDWARE MONITORING',8,C['cyan'],True,bg=C['bg']).pack(side='left',pady=5)
 
-        nav_button('⌂   داشبورد اصلی', self.refresh_info, CYAN2, True)
-        nav_button('◉   پایش هوشمند', self.start_stress_test, WHITE)
-        nav_button('▦   تست کامل قطعات', self.start_full, WHITE)
-        nav_button('▣   پردازنده CPU', lambda: self.start_one('CPU'), WHITE)
-        nav_button('▤   حافظه RAM', lambda: self.start_one('RAM'), WHITE)
-        nav_button('◈   کارت گرافیک', lambda: self.start_one('GPU'), WHITE)
-        nav_button('▱   حافظه دیسک', lambda: self.start_one('DISK'), WHITE)
-        nav_button('♨   دما و سنسورها', self.show_sensors, AMBER)
-        nav_button('▤   گزارش‌ها', self.open_reports, WHITE)
-        nav_button('⇩   ذخیره گزارش', self.save_report, CYAN2)
-        tk.Frame(nav, bg='#164064', height=1).pack(fill='x', pady=15)
-        tk.Label(nav, text='ارزیابی اولیه تکنسین', bg='#061b32',
-                 fg=CYAN2, font=('Segoe UI', 10, 'bold')).pack(anchor='e', padx=5, pady=(0,8))
-        self.assess_value = tk.Label(nav, text='هنوز انتخاب نشده', bg='#061b32',
-                                     fg=SUB, font=('Segoe UI', 9))
-        self.assess_value.pack(anchor='e', padx=5, pady=(0,8))
-        assess_row = tk.Frame(nav, bg='#061b32')
-        assess_row.pack(fill='x')
-        self.assess_stable_btn = tk.Button(assess_row, text='✓ پایدار',
-            command=lambda: self.set_assessment('پایدار'), bg='#07583f', fg='white',
-            activebackground='#087d58', relief='flat', padx=5, pady=8,
-            font=('Segoe UI', 9, 'bold'), cursor='hand2')
-        self.assess_stable_btn.pack(side='right', expand=True, fill='x', padx=(3,0))
-        self.assess_unstable_btn = tk.Button(assess_row, text='✕ ناپایدار',
-            command=lambda: self.set_assessment('ناپایدار'), bg='#642b3a', fg='white',
-            activebackground='#883448', relief='flat', padx=5, pady=8,
-            font=('Segoe UI', 9, 'bold'), cursor='hand2')
-        self.assess_unstable_btn.pack(side='left', expand=True, fill='x', padx=(0,3))
-        tk.Label(nav, text='شدت پیش‌فرض پایش: سبک', bg='#061b32',
-                 fg=SUB, font=('Segoe UI', 8)).pack(anchor='e', padx=5, pady=(14,2))
+        # Four live hardware cards
+        cards=tk.Frame(center,bg=C['bg']); cards.pack(fill='x',pady=(0,8))
+        self.metric_values={}; self.metric_details={}; self.metric_bars={}
+        for key,title,symbol in [('CPU','پردازنده','CPU'),('RAM','حافظه RAM','RAM'),
+                                 ('GPU','پردازنده گرافیکی','GPU'),('DISK','حافظه ذخیره‌سازی','SSD')]:
+            card=panel(cards,'#0a223b',10,8); card.pack(side='left',fill='both',expand=True,padx=3)
+            top=tk.Frame(card,bg='#0a223b'); top.pack(fill='x')
+            label(top,symbol,12,C['cyan'],True,bg='#0a223b').pack(side='left')
+            label(top,title,9,C['white'],True,bg='#0a223b').pack(side='right')
+            val=label(card,'--',17,C['cyan'],True,bg='#0a223b',anchor='e')
+            val.pack(fill='x',pady=(5,0)); self.metric_values[key]=val
+            detail=label(card,'در حال دریافت اطلاعات...',7,C['muted'],bg='#0a223b',anchor='e')
+            detail.pack(fill='x',pady=(1,4)); self.metric_details[key]=detail
+            bar=ttk.Progressbar(card,mode='determinate',maximum=100)
+            bar.pack(fill='x',ipady=2); self.metric_bars[key]=bar
 
-        # Main dashboard
-        center = tk.Frame(body, bg=BG0)
-        center.pack(side='left', fill='both', expand=True)
-        title_row = tk.Frame(center, bg=BG0)
-        title_row.pack(fill='x', pady=(0,10))
-        tk.Label(title_row, text='داشبورد سلامت و عملکرد سیستم', bg=BG0,
-                 fg=WHITE, font=('Segoe UI', 18, 'bold')).pack(side='right')
-        tk.Label(title_row, text='LIVE HARDWARE MONITORING', bg=BG0,
-                 fg=CYAN2, font=('Segoe UI', 8, 'bold')).pack(side='left', pady=7)
-
-        # Four hardware summary panels, with live values only (no synthetic gauges).
-        cards = tk.Frame(center, bg=BG0)
-        cards.pack(fill='x', pady=(0,12))
-        self.metric_values = {}
-        self.metric_details = {}
-        for key, title, symbol in [('CPU','پردازنده','CPU'),
-                                   ('RAM','حافظه RAM','▤'),
-                                   ('GPU','کارت گرافیک','◈'),
-                                   ('DISK','حافظه دیسک','▱')]:
-            card = tk.Frame(cards, bg='#082442', padx=12, pady=12,
-                            highlightbackground='#075b91', highlightthickness=1)
-            card.pack(side='left', fill='both', expand=True, padx=4)
-            head = tk.Frame(card, bg='#082442')
-            head.pack(fill='x')
-            tk.Label(head, text=symbol, bg='#082442', fg=CYAN2,
-                     font=('Segoe UI', 16, 'bold')).pack(side='left')
-            tk.Label(head, text=title, bg='#082442', fg=WHITE,
-                     font=('Segoe UI', 11, 'bold')).pack(side='right')
-            value = tk.Label(card, text='در حال خواندن...', bg='#082442',
-                             fg=CYAN2, font=('Segoe UI', 18, 'bold'),
-                             anchor='e', justify='right')
-            value.pack(fill='x', pady=(12,3))
-            detail = tk.Label(card, text='اطلاعات سخت‌افزار', bg='#082442',
-                              fg=SUB, font=('Segoe UI', 8), anchor='e',
-                              justify='right', wraplength=210, height=2)
-            detail.pack(fill='x')
-            self.metric_values[key] = value
-            self.metric_details[key] = detail
-
-        # Main monitoring workspace: progress panel and honest overall status.
-        mainrow = tk.Frame(center, bg=BG0)
-        mainrow.pack(fill='x', pady=(0,12))
-        monitor = tk.Frame(mainrow, bg='#061d36', padx=20, pady=17,
-                           highlightbackground=CYAN2, highlightthickness=1)
-        monitor.pack(side='left', fill='both', expand=True, padx=(0,8))
-        side_status = tk.Frame(mainrow, bg='#082442', width=205, padx=14, pady=16,
-                               highlightbackground='#075b91', highlightthickness=1)
-        side_status.pack(side='right', fill='y', padx=(8,0))
-        side_status.pack_propagate(False)
-        monitor_head = tk.Frame(monitor, bg='#061d36')
-        monitor_head.pack(fill='x')
-        tk.Label(monitor_head, text='مرکز پایش هوشمند سیستم', bg='#061d36',
-                 fg=WHITE, font=('Segoe UI', 16, 'bold')).pack(side='right')
-        tk.Label(monitor_head, text='● LIVE', bg='#061d36', fg=GREEN2,
-                 font=('Segoe UI', 9, 'bold')).pack(side='left', pady=5)
-        self.summary = tk.Label(monitor,
-            text='برای آغاز، نوع بررسی را از منوی سمت راست انتخاب کنید.',
-            bg='#061d36', fg=SUB, font=('Segoe UI', 10),
-            anchor='e', justify='right', wraplength=680)
-        self.summary.pack(fill='x', pady=(15,8))
-        self.stress_pct = tk.Label(monitor, text='۰٪', bg='#061d36',
-                                   fg=CYAN2, font=('Segoe UI', 48, 'bold'))
-        self.stress_pct.pack(anchor='center', pady=(2,0))
-        tk.Label(monitor, text='درصد پیشرفت فرایند', bg='#061d36',
-                 fg=SUB, font=('Segoe UI', 9)).pack(anchor='center')
-        self.stress_bar = ttk.Progressbar(monitor, mode='determinate', maximum=100)
-        self.stress_bar.pack(fill='x', pady=(12,12), ipady=8)
-        self.stress_stage = tk.Label(monitor, text='آماده شروع  •  شدت سبک',
-                                     bg='#061d36', fg=WHITE,
-                                     font=('Segoe UI', 11, 'bold'), anchor='center')
-        self.stress_stage.pack(fill='x', pady=(2,7))
-        self.stress_time = tk.Label(monitor,
-            text='زمان کل: ۳۰:۰۰   |   زمان باقی‌مانده: ۳۰:۰۰',
-            bg='#061d36', fg=SUB, font=('Segoe UI', 10), anchor='center')
-        self.stress_time.pack(fill='x')
-        self.stress_detail = tk.Label(monitor,
-            text='مراحل پایش: CPU  •  RAM  •  GPU  •  SSD / HDD',
-            bg='#061d36', fg=CYAN2, font=('Segoe UI', 9), anchor='center')
-        self.stress_detail.pack(fill='x', pady=(10,13))
-        actions = tk.Frame(monitor, bg='#061d36')
-        actions.pack(fill='x')
-        self.stress_start_btn = tk.Button(actions, text='▶  شروع پایش ۳۰ دقیقه‌ای',
-            command=self.start_stress_test, bg='#007b58', fg='white',
-            activebackground='#00976b', relief='flat', padx=18, pady=11,
-            font=('Segoe UI', 10, 'bold'), cursor='hand2')
-        self.stress_start_btn.pack(side='right', expand=True, fill='x', padx=(0,5))
-        self.stress_stop_btn = tk.Button(actions, text='■ توقف پایش',
-            command=self.stop_stress_test, bg='#702d3c', fg='white',
-            activebackground='#963c4e', relief='flat', padx=16, pady=11,
-            font=('Segoe UI', 9, 'bold'), state='disabled', cursor='hand2')
-        self.stress_stop_btn.pack(side='left', padx=(5,0))
-        self.progress = ttk.Progressbar(monitor, mode='determinate', maximum=100)
-        self.progress.pack(fill='x', pady=(12,2))
-        self.progress_label = tk.Label(monitor, text='پیشرفت آزمون‌ها: ۰٪',
-                                       bg='#061d36', fg=SUB, font=('Segoe UI', 8), anchor='e')
+        # Central monitoring and compact system status
+        mainrow=tk.Frame(center,bg=C['bg']); mainrow.pack(fill='x',pady=(0,8))
+        monitor=panel(mainrow,'#081d33',15,10)
+        monitor.pack(side='left',fill='both',expand=True,padx=(0,5))
+        side=panel(mainrow,'#0a223b',12,10); side.pack(side='right',fill='y',padx=(5,0))
+        mh=tk.Frame(monitor,bg='#081d33'); mh.pack(fill='x')
+        label(mh,'مرکز فرماندهی پایش هوشمند',12,C['white'],True,bg='#081d33').pack(side='right')
+        label(mh,'● SYSTEM MONITOR',8,C['green'],True,bg='#081d33').pack(side='left')
+        self.summary=label(monitor,'برای آغاز بررسی، یکی از آزمون‌ها را انتخاب کنید.',8,C['muted'],bg='#081d33',anchor='e',justify='right')
+        self.summary.pack(fill='x',pady=(5,3))
+        self.stress_pct=label(monitor,'۰٪',35,C['cyan'],True,bg='#081d33')
+        self.stress_pct.pack(anchor='center')
+        label(monitor,'درصد پیشرفت فرایند',7,C['muted'],bg='#081d33').pack(anchor='center')
+        self.stress_bar=ttk.Progressbar(monitor,mode='determinate',maximum=100)
+        self.stress_bar.pack(fill='x',pady=(5,5),ipady=5)
+        self.stress_stage=label(monitor,'آماده شروع  •  شدت سبک',9,C['white'],True,bg='#081d33')
+        self.stress_stage.pack(fill='x',anchor='center')
+        self.stress_time=label(monitor,'زمان کل: ۳۰:۰۰  |  باقی‌مانده: ۳۰:۰۰',8,C['muted'],bg='#081d33')
+        self.stress_time.pack(fill='x',pady=(2,4))
+        self.stress_detail=label(monitor,'CPU  •  RAM  •  GPU  •  SSD / HDD',7,C['cyan'],bg='#081d33')
+        self.stress_detail.pack(fill='x',pady=(0,6))
+        controls=tk.Frame(monitor,bg='#081d33'); controls.pack(fill='x')
+        self.stress_start_btn=action(controls,'▶  شروع پایش ۳۰ دقیقه‌ای',self.start_stress_test,'#087b5b')
+        self.stress_start_btn.pack(side='right',fill='x',expand=True,padx=(0,4))
+        self.stress_stop_btn=action(controls,'■ توقف',self.stop_stress_test,'#702d3c')
+        self.stress_stop_btn.pack(side='left',padx=(4,0)); self.stress_stop_btn.config(state='disabled')
+        self.progress=ttk.Progressbar(monitor,mode='determinate',maximum=100)
+        self.progress.pack(fill='x',pady=(6,1))
+        self.progress_label=label(monitor,'پیشرفت آزمون‌ها: ۰٪',7,C['muted'],bg='#081d33',anchor='e')
         self.progress_label.pack(fill='x')
 
-        tk.Label(side_status, text='◈', bg='#082442', fg=CYAN2,
-                 font=('Segoe UI', 35, 'bold')).pack(anchor='center', pady=(2,4))
-        tk.Label(side_status, text='وضعیت کلی سیستم', bg='#082442',
-                 fg=WHITE, font=('Segoe UI', 11, 'bold')).pack(anchor='center')
-        self.overall_status = tk.Label(side_status, text='در انتظار بررسی',
-                 bg='#123451', fg=AMBER, font=('Segoe UI', 13, 'bold'),
-                 padx=8, pady=10)
-        self.overall_status.pack(fill='x', pady=(12,14))
+        label(side,'◈',26,C['cyan'],True).pack()
+        label(side,'وضعیت کلی سیستم',9,C['white'],True).pack()
+        self.overall_status=label(side,'در انتظار بررسی',11,C['amber'],True,bg='#15344d')
+        self.overall_status.pack(fill='x',pady=(7,8),ipady=5)
         for item in ('پردازنده','حافظه RAM','کارت گرافیک','حافظه دیسک'):
-            tk.Label(side_status, text='○  '+item, bg='#082442',
-                     fg=SUB, font=('Segoe UI', 9), anchor='e').pack(fill='x', pady=6)
-        tk.Label(side_status, text='وضعیت فقط پس از آزمون واقعی مشخص می‌شود.',
-                 bg='#082442', fg=AMBER, font=('Segoe UI', 8),
-                 wraplength=170, justify='right').pack(side='bottom', fill='x', pady=(12,0))
+            label(side,'○  '+item,8,C['muted'],bg=C['panel']).pack(anchor='e',pady=3)
+        label(side,'نتیجه فقط بر پایه داده و آزمون واقعی اعلام می‌شود.',7,C['amber'],bg=C['panel'],wraplength=155,justify='right').pack(side='bottom',pady=(8,0))
 
-        # Live temperature panel
-        temp_panel = tk.Frame(center, bg='#071f38', padx=14, pady=11,
-                              highlightbackground='#075b91', highlightthickness=1)
-        temp_panel.pack(fill='x', pady=(0,12))
-        temp_head = tk.Frame(temp_panel, bg='#071f38')
-        temp_head.pack(fill='x')
-        tk.Label(temp_head, text='دما و حسگرهای سخت‌افزار', bg='#071f38',
-                 fg=WHITE, font=('Segoe UI', 11, 'bold')).pack(side='right')
-        self.temp_source_label = tk.Label(temp_head, text='در حال شناسایی حسگرها...',
-                 bg='#071f38', fg=SUB, font=('Segoe UI', 8))
+        # Temperature strip; unavailable sensors stay explicitly unavailable.
+        temps=panel(center,'#091f36',10,7); temps.pack(fill='x',pady=(0,8))
+        th=tk.Frame(temps,bg='#091f36'); th.pack(fill='x')
+        label(th,'دما و حسگرهای سخت‌افزار',9,C['white'],True,bg='#091f36').pack(side='right')
+        self.temp_source_label=label(th,'در حال شناسایی حسگرها...',7,C['muted'],bg='#091f36')
         self.temp_source_label.pack(side='left')
-        temp_grid = tk.Frame(temp_panel, bg='#071f38')
-        temp_grid.pack(fill='x', pady=(8,0))
-        self.temp_values = {}
-        for key, caption in [('CPU','پردازنده'),('GPU','گرافیک'),
-                             ('DISK','حافظه'),('BOARD','مادربرد')]:
-            tile = tk.Frame(temp_grid, bg='#0b2b49', padx=10, pady=8,
-                            highlightbackground='#16476b', highlightthickness=1)
-            tile.pack(side='left', fill='both', expand=True, padx=4)
-            tk.Label(tile, text=caption, bg='#0b2b49', fg=SUB,
-                     font=('Segoe UI', 9, 'bold')).pack(anchor='center')
-            value = tk.Label(tile, text='-- °C', bg='#0b2b49', fg=CYAN2,
-                             font=('Segoe UI', 18, 'bold'))
-            value.pack(anchor='center', pady=(3,1))
-            detail = tk.Label(tile, text='در انتظار داده سنسور', bg='#0b2b49',
-                              fg=SUB, font=('Segoe UI', 8), wraplength=175,
-                              justify='center')
-            detail.pack(anchor='center')
-            self.temp_values[key] = (value, detail)
-        self.temp_hint = tk.Label(temp_panel,
-            text='برای دریافت دمای واقعی قطعات، سنسور سازگار یا LibreHardwareMonitor لازم است.',
-            bg='#071f38', fg=AMBER, font=('Segoe UI', 8), anchor='e', justify='right')
-        self.temp_hint.pack(fill='x', pady=(8,0))
+        tg=tk.Frame(temps,bg='#091f36'); tg.pack(fill='x',pady=(5,0))
+        self.temp_values={}
+        for key,caption in [('CPU','پردازنده'),('GPU','گرافیک'),('DISK','حافظه'),('BOARD','مادربرد')]:
+            tile=tk.Frame(tg,bg='#102b46',padx=8,pady=4); tile.pack(side='left',fill='both',expand=True,padx=3)
+            label(tile,caption,7,C['muted'],True,bg='#102b46').pack(anchor='center')
+            value=label(tile,'-- °C',13,C['cyan'],True,bg='#102b46'); value.pack(anchor='center')
+            detail=label(tile,'سنسور شناسایی نشده',6,C['muted'],bg='#102b46'); detail.pack(anchor='center')
+            self.temp_values[key]=(value,detail)
+        self.temp_hint=label(temps,'دمای قطعات فقط در صورت دسترسی به سنسور واقعی نمایش داده می‌شود.',7,C['amber'],bg='#091f36',anchor='e')
+        self.temp_hint.pack(fill='x',pady=(4,0))
 
-        # Three lower columns: test stages, result log, alerts.
-        lower = tk.Frame(center, bg=BG0)
-        lower.pack(fill='both', expand=True, pady=(0,10))
-        stages = tk.Frame(lower, bg='#082442', padx=12, pady=12,
-                          highlightbackground='#075b91', highlightthickness=1)
-        stages.pack(side='left', fill='both', expand=True, padx=(0,5))
-        log = tk.Frame(lower, bg='#082442', padx=12, pady=12,
-                       highlightbackground='#075b91', highlightthickness=1)
-        log.pack(side='left', fill='both', expand=True, padx=5)
-        alerts = tk.Frame(lower, bg='#082442', padx=12, pady=12,
-                         highlightbackground='#075b91', highlightthickness=1)
-        alerts.pack(side='left', fill='both', expand=True, padx=(5,0))
-        tk.Label(stages, text='مراحل انجام کار', bg='#082442', fg=WHITE,
-                 font=('Segoe UI', 11, 'bold')).pack(anchor='e')
-        self.stage_list = tk.Label(stages,
-            text='○  بررسی مشخصات سیستم\n○  بررسی پردازنده CPU\n○  بررسی حافظه RAM\n○  بررسی کارت گرافیک\n○  بررسی حافظه دیسک\n○  تولید گزارش نهایی',
-            bg='#082442', fg=SUB, font=('Segoe UI', 9), justify='right',
-            anchor='e')
-        self.stage_list.pack(fill='both', expand=True, pady=(10,0))
-        tk.Label(log, text='گزارش لحظه‌ای و نتایج', bg='#082442', fg=WHITE,
-                 font=('Segoe UI', 11, 'bold')).pack(anchor='e', pady=(0,8))
-        table_wrap = tk.Frame(log, bg='#082442')
-        table_wrap.pack(fill='both', expand=True)
-        cols = ('test','status','detail')
-        self.tree = ttk.Treeview(table_wrap, columns=cols, show='headings', height=6)
-        self.tree.heading('test', text='آزمون')
-        self.tree.heading('status', text='وضعیت')
-        self.tree.heading('detail', text='جزئیات')
-        self.tree.column('test', width=85, anchor='center')
-        self.tree.column('status', width=100, anchor='center')
-        self.tree.column('detail', width=270, anchor='e')
-        table_scroll = ttk.Scrollbar(table_wrap, orient='vertical', command=self.tree.yview)
-        self.tree.configure(yscrollcommand=table_scroll.set)
-        self.tree.pack(side='left', fill='both', expand=True)
-        table_scroll.pack(side='right', fill='y')
-        self.tree.tag_configure('ok', foreground=GREEN2)
-        self.tree.tag_configure('warn', foreground=AMBER)
-        self.tree.tag_configure('bad', foreground=RED2)
-        tk.Label(alerts, text='هشدارها و نکات مهم  ⚠', bg='#082442',
-                 fg=AMBER, font=('Segoe UI', 11, 'bold')).pack(anchor='e')
-        self.alert_status = tk.Label(alerts,
-            text='سامانه آماده است. هشدارهای واقعی پس از بررسی در این بخش نمایش داده می‌شوند.',
-            bg='#082442', fg=SUB, font=('Segoe UI', 9),
-            anchor='e', justify='right', wraplength=240)
-        self.alert_status.pack(fill='both', expand=True, pady=(10,0))
+        # Bottom information band: stages, latest results, alerts.
+        lower=tk.Frame(center,bg=C['bg']); lower.pack(fill='both',expand=True)
+        stages=panel(lower,C['panel'],10,8); stages.pack(side='left',fill='both',expand=True,padx=(0,4))
+        logs=panel(lower,C['panel'],10,8); logs.pack(side='left',fill='both',expand=True,padx=4)
+        alerts=panel(lower,C['panel'],10,8); alerts.pack(side='left',fill='both',expand=True,padx=(4,0))
+        section(stages,'مراحل بررسی','TEST FLOW')
+        self.stage_list=label(stages,'○  مشخصات سیستم     ○  CPU     ○  RAM\n○  GPU     ○  دیسک     ○  گزارش نهایی',8,C['muted'],bg=C['panel'],justify='right',anchor='e')
+        self.stage_list.pack(fill='both',expand=True)
+        section(logs,'نتایج و گزارش لحظه‌ای','LIVE RESULTS')
+        table=tk.Frame(logs,bg=C['panel']); table.pack(fill='both',expand=True)
+        self.tree=ttk.Treeview(table,columns=('test','status','detail'),show='headings',height=4)
+        for col,title,width in [('test','آزمون',62),('status','وضعیت',76),('detail','جزئیات',180)]:
+            self.tree.heading(col,text=title); self.tree.column(col,width=width,anchor='e' if col=='detail' else 'center')
+        self.tree.pack(fill='both',expand=True)
+        self.tree.tag_configure('ok',foreground=C['green'])
+        self.tree.tag_configure('warn',foreground=C['amber'])
+        self.tree.tag_configure('bad',foreground=C['red'])
+        section(alerts,'هشدارها و نکات مهم','ALERT CENTER')
+        self.alert_status=label(alerts,'سامانه آماده است. هشدارهای واقعی پس از بررسی در این بخش نمایش داده می‌شوند.',8,C['muted'],bg=C['panel'],justify='right',anchor='ne',wraplength=230)
+        self.alert_status.pack(fill='both',expand=True)
 
-        footer = tk.Frame(self.root, bg='#04172c', height=42,
-                          highlightbackground='#075b91', highlightthickness=1)
-        footer.pack(fill='x', side='bottom')
-        footer.pack_propagate(False)
-        tk.Label(footer, text='طراحی و برنامه‌نویسی: جواد مختاری',
-                 bg='#04172c', fg=WHITE, font=('Segoe UI', 9, 'bold')).pack(side='right', padx=18, pady=9)
-        tk.Label(footer, text='JAVAD PC DOCTOR  •  سامانه پایش سخت‌افزار',
-                 bg='#04172c', fg=CYAN2, font=('Segoe UI', 8)).pack(side='left', padx=18, pady=9)
-
-        # Apply the dark neon palette to native ttk widgets.
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('TProgressbar', troughcolor='#102c49', background=CYAN2,
-                        bordercolor='#102c49', lightcolor=CYAN2, darkcolor=CYAN2)
-        style.configure('Treeview', background='#071c33', foreground=WHITE,
-                        fieldbackground='#071c33', rowheight=27, borderwidth=0,
-                        font=('Segoe UI', 9))
-        style.configure('Treeview.Heading', background='#0b3558', foreground=WHITE,
-                        font=('Segoe UI', 9, 'bold'), relief='flat')
-        style.map('Treeview', background=[('selected', '#07527c')],
-                  foreground=[('selected', WHITE)])
+        footer=tk.Frame(self.root,bg=C['header'],height=27,
+                        highlightbackground=C['edge'],highlightthickness=1)
+        footer.pack(side='bottom',fill='x'); footer.pack_propagate(False)
+        label(footer,'طراحی و برنامه‌نویسی: جواد مختاری',8,C['white'],True,bg=C['header']).pack(side='right',padx=16)
+        label(footer,'JAVAD PC DOCTOR  •  HARDWARE HEALTH MONITOR',7,C['cyan'],True,bg=C['header']).pack(side='left',padx=16)
 
     def _panel_title(self, parent, text):
         tk.Label(parent, text=text, bg=BG, fg=CYAN, font=('Segoe UI', 13, 'bold')).pack(anchor='w', pady=(4,9))
