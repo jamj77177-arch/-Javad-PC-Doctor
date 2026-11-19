@@ -749,6 +749,7 @@ class DoctorApp:
         self.status.config(text='● پایش مرحله‌ای در حال اجرا',fg=YELLOW)
         self.summary.config(text='پایش مرحله‌ای در حال اجراست؛ شدت سبک و بدون بار مصنوعی.')
         self.stress_start_btn.config(state='disabled'); self.stress_stop_btn.config(state='normal')
+        self._show_test_notice()
         self._stress_ui(0,'آماده‌سازی',1800,'پایش مرحله‌ای با شدت سبک')
         threading.Thread(target=self._stress_worker,daemon=True).start()
 
