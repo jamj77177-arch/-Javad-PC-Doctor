@@ -139,12 +139,19 @@ def get_system_info():
 def disk_health():
     # Windows reports a coarse health status; not a full SMART surface scan.
     out = run_powershell("Get-PhysicalDisk | Select-Object FriendlyName,HealthStatus,OperationalStatus,MediaType | ConvertTo-Json -Compress")
-    if not out: return 'وضعیت SMART/سلامت دیسک از ویندوز قابل دریافت نبود؛ ابزار تخصصی سازنده توصیه می‌شود.'
+    if not out:
+        return 'وضعیت سلامت دیسک از ویندوز قابل دریافت نیست؛ مقدار نامشخص است.'
     try:
         data = json.loads(out)
         if isinstance(data, dict): data = [data]
-        return '\n'.join(f"{d.get('FriendlyName','Disk')}: سلامت={d.get('HealthStatus','نامشخص')}، وضعیت={d.get('OperationalStatus','نامشخص')}، نوع={d.get('MediaType','نامشخص')}" for d in data)
-    except Exception: return out
+        data = [d for d in data if isinstance(d, dict)]
+        if not data:
+            return 'ویندوز هیچ دیسک فیزیکی قابل گزارش نکرد؛ وضعیت سلامت نامشخص است.'
+        return '\n'.join(
+            f"{d.get('FriendlyName') or 'نام دیسک شناسایی نشد'}: سلامت={d.get('HealthStatus') or 'نامشخص'}، وضعیت={d.get('OperationalStatus') or 'نامشخص'}، نوع={d.get('MediaType') or 'نامشخص'}"
+            for d in data)
+    except Exception:
+        return 'پاسخ سلامت دیسک قابل تفسیر نیست؛ وضعیت نامشخص است.'
 
 
 
@@ -541,12 +548,12 @@ class DoctorApp:
         except Exception:
             ram_pct, ram_text = None, self.info.get('RAM total','نامشخص')
         try:
-            root_path = os.environ.get('SystemDrive', 'C:') + os.sep
-            du = psutil.disk_usage(root_path) if psutil else None
+            system_drive = os.environ.get('SystemDrive')
+            du = psutil.disk_usage(system_drive + os.sep) if (psutil and system_drive) else None
             disk_pct = float(du.percent) if du else None
-            disk_text = f"{du.used / (1024**3):.0f} / {du.total / (1024**3):.0f} GB" if du else self.info.get('Drives','قابل شناسایی نبود')
+            disk_text = f"درایو سیستم: {du.used / (1024**3):.0f} / {du.total / (1024**3):.0f} GB" if du else 'ظرفیت درایو سیستم قابل خواندن نیست'
         except Exception:
-            disk_pct, disk_text = None, self.info.get('Drives','قابل شناسایی نبود')
+            disk_pct, disk_text = None, 'ظرفیت درایو سیستم قابل خواندن نیست'
         cpu_model = (self.info.get('CPU details','شناسایی نشد').split(' | ')[0] or 'مدل CPU شناسایی نشد')
         ram_modules = self.info.get('RAM modules','شناسایی نشد')
         ram_count = len(ram_modules.split(' ؛ ')) if ram_modules != 'شناسایی نشد' else 0
@@ -566,9 +573,17 @@ class DoctorApp:
         for key, (value, detail) in values.items():
             self.metric_values[key].config(text=value)
             self.metric_details[key].config(text=detail)
+        # Never display an unavailable measurement as a measured zero.
         for key, pct in [('CPU',cpu_pct),('RAM',ram_pct),('DISK',disk_pct)]:
-            self.metric_bars[key]['value'] = pct if pct is not None else 0
-        self.metric_bars['GPU']['value'] = 0
+            bar = self.metric_bars[key]
+            if pct is None:
+                bar.pack_forget()
+            else:
+                if not bar.winfo_manager():
+                    bar.pack(fill='x',ipady=2)
+                bar['value'] = pct
+        # GPU utilization is unavailable on this data source; hide its bar.
+        self.metric_bars['GPU'].pack_forget()
     def add_result(self, test, status, detail):
         tag = 'ok' if status == 'سالم' else ('bad' if status == 'خطا' else 'warn')
         self.tree.insert('', 'end', values=(test,status,detail), tags=(tag,))
@@ -581,6 +596,7 @@ class DoctorApp:
             return
         if self.running: return
         self.tree.delete(*self.tree.get_children()); self.results=[]; self.running=True; self.status.config(text='● در حال تست...',fg=YELLOW); self.summary.config(text='بررسی مرحله‌ای سخت‌افزار در حال اجراست...')
+        self._show_test_notice()
         threading.Thread(target=self._full_worker,daemon=True).start()
     def start_one(self, what):
         if self.technician_assessment == 'انتخاب نشده':
@@ -588,7 +604,54 @@ class DoctorApp:
             return
         if self.running: return
         self.tree.delete(*self.tree.get_children()); self.results=[]; self.running=True; self.status.config(text='● در حال تست...',fg=YELLOW)
+        self._show_test_notice()
         threading.Thread(target=self._one_worker,args=(what,),daemon=True).start()
+
+    def _show_test_notice(self):
+        # Compact non-modal notice anchored over the navigation rail, away from
+        # the central percentage/progress display and the hardware cards.
+        self._hide_test_notice()
+        win = tk.Toplevel(self.root)
+        self.test_notice = win
+        win.overrideredirect(True)
+        win.configure(bg='#0b2944')
+        win.attributes('-topmost', True)
+        width, height = 270, 86
+        x = self.root.winfo_rootx() + 14
+        y = self.root.winfo_rooty() + max(90, self.root.winfo_height() - height - 34)
+        win.geometry(f'{width}x{height}+{x}+{y}')
+        frame = tk.Frame(win, bg='#0b2944', highlightbackground='#19d9f2', highlightthickness=2)
+        frame.pack(fill='both', expand=True)
+        canvas = tk.Canvas(frame, width=58, height=58, bg='#0b2944', highlightthickness=0)
+        canvas.pack(side='left', padx=(8,5), pady=8)
+        canvas.create_oval(5,5,53,53,outline='#164766',width=3)
+        arc = canvas.create_arc(5,5,53,53,start=25,extent=105,style='arc',outline='#19d9f2',width=4)
+        canvas.create_oval(23,23,35,35,fill='#19d9f2',outline='')
+        text_frame = tk.Frame(frame,bg='#0b2944')
+        text_frame.pack(side='right',fill='both',expand=True,padx=(0,9))
+        tk.Label(text_frame,text='لطفاً دست نزنید',bg='#0b2944',fg='#ffffff',
+                 font=('Segoe UI',11,'bold'),anchor='e').pack(fill='x',pady=(15,1))
+        tk.Label(text_frame,text='سیستم در حال بررسی است',bg='#0b2944',fg='#19d9f2',
+                 font=('Segoe UI',8,'bold'),anchor='e').pack(fill='x')
+        self._notice_angle = 25
+        def animate():
+            if not getattr(self,'test_notice',None) or not self.test_notice.winfo_exists():
+                return
+            self._notice_angle = (self._notice_angle + 18) % 360
+            canvas.itemconfigure(arc,start=self._notice_angle)
+            self._notice_after = self.root.after(75,animate)
+        animate()
+
+    def _hide_test_notice(self):
+        try:
+            if getattr(self,'_notice_after',None):
+                self.root.after_cancel(self._notice_after)
+                self._notice_after = None
+            if getattr(self,'test_notice',None) and self.test_notice.winfo_exists():
+                self.test_notice.destroy()
+        except Exception:
+            pass
+        self.test_notice = None
     def _ui(self, fn, *args): self.root.after(0, lambda: fn(*args))
     def _full_worker(self):
         tests=[('SYS',self.test_system),('CPU',self.test_cpu),('RAM',self.test_ram),('DISK',self.test_disk),('GPU',self.test_gpu)]
@@ -604,7 +667,9 @@ class DoctorApp:
         except Exception as e: status,detail='نیازمند بررسی',str(e)
         self._ui(self.add_result,what,status,detail); self._ui(self.set_progress,100,what); self._ui(self.finish)
     def finish(self):
-        self.running=False; self.status.config(text='● بررسی تمام شد',fg=GREEN); self.summary.config(text='بررسی به پایان رسید. نتیجه‌ها را در جدول ببینید و گزارش را ذخیره کنید.')
+        self.running=False
+        self._hide_test_notice()
+        self.status.config(text='● بررسی تمام شد',fg=GREEN); self.summary.config(text='بررسی به پایان رسید. نتیجه‌ها را در جدول ببینید و گزارش را ذخیره کنید.')
     def test_system(self):
         self.refresh_info(); return 'سالم', f"سیستم: {self.info.get('Computer')} | ویندوز: {self.info.get('OS')} | RAM: {self.info.get('RAM total','نامشخص')}"
     def test_cpu(self):
@@ -744,6 +809,7 @@ class DoctorApp:
 
     def _stress_finish(self, outcome, status):
         self.running=False; self.stress_running=False
+        self._hide_test_notice()
         self.stress_start_btn.config(state='normal'); self.stress_stop_btn.config(state='disabled')
         self.status.config(text='● '+outcome,fg=YELLOW)
         self.summary.config(text='پایش پایان یافت؛ نتیجه مرحله‌ای است و سلامت واقعی قطعات را نشان نمی‌دهد.')
