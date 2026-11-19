@@ -335,6 +335,7 @@ class DoctorApp:
         label(brand,'HARDWARE DIAGNOSTIC CENTER',7,C['muted'],True,bg=C['header']).pack(anchor='w')
         hospital=tk.Frame(header,bg=C['header']); hospital.pack(side='right',padx=22,pady=8)
         label(hospital,'✚  بیمارستان آیت‌الله روحانی',17,C['white'],True,bg=C['header']).pack(anchor='e')
+        label(hospital,'برنامه‌نویس: جواد مختاری',9,C['white'],True,bg=C['header']).pack(anchor='e')
         label(hospital,f'JAVAD PC DOCTOR  •  نسخه {VERSION}  |  سامانه هوشمند پایش سخت‌افزار',8,C['cyan'],True,bg=C['header']).pack(anchor='e')
         self.status=label(header,'● آماده بررسی',9,C['green'],True,bg=C['header'])
         self.status.pack(side='left',padx=22)
