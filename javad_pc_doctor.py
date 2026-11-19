@@ -547,15 +547,21 @@ class DoctorApp:
             disk_text = f"{du.used / (1024**3):.0f} / {du.total / (1024**3):.0f} GB" if du else self.info.get('Drives','قابل شناسایی نبود')
         except Exception:
             disk_pct, disk_text = None, self.info.get('Drives','قابل شناسایی نبود')
-        gpu = self.info.get('GPU','قابل شناسایی نبود')
+        cpu_model = (self.info.get('CPU details','شناسایی نشد').split(' | ')[0] or 'مدل CPU شناسایی نشد')
+        ram_modules = self.info.get('RAM modules','شناسایی نشد')
+        ram_count = len(ram_modules.split(' ؛ ')) if ram_modules != 'شناسایی نشد' else 0
+        gpu_details = self.info.get('GPU details','شناسایی نشد')
+        gpu_model = gpu_details.split(' | ')[0] if gpu_details != 'شناسایی نشد' else 'مدل GPU شناسایی نشد'
+        disk_models = self.info.get('Physical disks','شناسایی نشد')
+        disk_model = disk_models.split(' | ')[0] if disk_models != 'شناسایی نشد' else 'مدل دیسک شناسایی نشد'
         values = {
             'CPU': (f"{cpu_pct:.0f}٪" if cpu_pct is not None else 'نامشخص',
-                    'مصرف لحظه‌ای پردازنده'),
+                    cpu_model[:62]),
             'RAM': (f"{ram_pct:.0f}٪" if ram_pct is not None else 'نامشخص',
-                    ram_text),
-            'GPU': (gpu, 'نام و مدل شناسایی‌شده؛ درصد بار در دسترس نیست'),
+                    f"{ram_text} | ماژول‌های شناسایی‌شده: {ram_count}" if ram_count else ram_text),
+            'GPU': (gpu_model[:48], 'درصد بار GPU در دسترس نیست؛ مدل به‌تنهایی سلامت را تأیید نمی‌کند'),
             'DISK': (f"{disk_pct:.0f}٪ اشغال" if disk_pct is not None else 'نامشخص',
-                     disk_text)
+                     f"{disk_text} | {disk_model[:45]}")
         }
         for key, (value, detail) in values.items():
             self.metric_values[key].config(text=value)
