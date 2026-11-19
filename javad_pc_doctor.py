@@ -608,38 +608,68 @@ class DoctorApp:
         threading.Thread(target=self._one_worker,args=(what,),daemon=True).start()
 
     def _show_test_notice(self):
-        # Compact non-modal notice anchored over the navigation rail, away from
-        # the central percentage/progress display and the hardware cards.
+        # Large glass-style floating notice, centered near the top edge.
+        # It stays non-modal and is positioned below the application header.
         self._hide_test_notice()
         win = tk.Toplevel(self.root)
         self.test_notice = win
         win.overrideredirect(True)
-        win.configure(bg='#0b2944')
+        win.configure(bg='#071a2b')
         win.attributes('-topmost', True)
-        width, height = 270, 86
-        x = self.root.winfo_rootx() + 14
-        y = self.root.winfo_rooty() + max(90, self.root.winfo_height() - height - 34)
+        try:
+            win.attributes('-alpha', 0.93)
+        except Exception:
+            pass
+
+        width, height = 440, 122
+        self.root.update_idletasks()
+        root_x = self.root.winfo_rootx()
+        root_y = self.root.winfo_rooty()
+        root_w = max(self.root.winfo_width(), width)
+        x = root_x + (root_w - width) // 2
+        y = root_y + 82
         win.geometry(f'{width}x{height}+{x}+{y}')
-        frame = tk.Frame(win, bg='#0b2944', highlightbackground='#19d9f2', highlightthickness=2)
-        frame.pack(fill='both', expand=True)
-        canvas = tk.Canvas(frame, width=58, height=58, bg='#0b2944', highlightthickness=0)
-        canvas.pack(side='left', padx=(8,5), pady=8)
-        canvas.create_oval(5,5,53,53,outline='#164766',width=3)
-        arc = canvas.create_arc(5,5,53,53,start=25,extent=105,style='arc',outline='#19d9f2',width=4)
-        canvas.create_oval(23,23,35,35,fill='#19d9f2',outline='')
-        text_frame = tk.Frame(frame,bg='#0b2944')
-        text_frame.pack(side='right',fill='both',expand=True,padx=(0,9))
-        tk.Label(text_frame,text='لطفاً دست نزنید',bg='#0b2944',fg='#ffffff',
-                 font=('Segoe UI',11,'bold'),anchor='e').pack(fill='x',pady=(15,1))
-        tk.Label(text_frame,text='سیستم در حال بررسی است',bg='#0b2944',fg='#19d9f2',
-                 font=('Segoe UI',8,'bold'),anchor='e').pack(fill='x')
+
+        shell = tk.Frame(win, bg='#071a2b', highlightbackground='#19d9f2',
+                         highlightthickness=1, bd=0)
+        shell.pack(fill='both', expand=True)
+        accent = tk.Frame(shell, bg='#19d9f2', height=4)
+        accent.pack(side='top', fill='x')
+        body = tk.Frame(shell, bg='#0b2944')
+        body.pack(fill='both', expand=True)
+
+        canvas = tk.Canvas(body, width=88, height=88, bg='#0b2944',
+                           highlightthickness=0, bd=0)
+        canvas.pack(side='left', padx=(17, 13), pady=9)
+        canvas.create_oval(9, 9, 79, 79, outline='#174765', width=5)
+        arc = canvas.create_arc(9, 9, 79, 79, start=25, extent=105,
+                                style='arc', outline='#19d9f2', width=5)
+        canvas.create_oval(35, 35, 53, 53, fill='#19d9f2', outline='')
+        canvas.create_oval(39, 39, 49, 49, fill='#0b2944', outline='')
+
+        text_frame = tk.Frame(body, bg='#0b2944')
+        text_frame.pack(side='right', fill='both', expand=True,
+                        padx=(0, 20), pady=(15, 10))
+        top_line = tk.Frame(text_frame, bg='#0b2944')
+        top_line.pack(fill='x')
+        tk.Label(top_line, text='●  LIVE MONITORING', bg='#0b2944',
+                 fg='#19d9f2', font=('Segoe UI', 8, 'bold'),
+                 anchor='e').pack(side='right')
+        tk.Label(text_frame, text='لطفاً به سیستم دست نزنید',
+                 bg='#0b2944', fg='#ffffff',
+                 font=('Segoe UI', 15, 'bold'), anchor='e').pack(fill='x', pady=(5, 2))
+        tk.Label(text_frame, text='بررسی در حال اجراست؛ تا پایان عملیات صبر کنید',
+                 bg='#0b2944', fg='#a9c9dc',
+                 font=('Segoe UI', 9), anchor='e').pack(fill='x')
         self._notice_angle = 25
+
         def animate():
-            if not getattr(self,'test_notice',None) or not self.test_notice.winfo_exists():
+            if not getattr(self, 'test_notice', None) or not self.test_notice.winfo_exists():
                 return
-            self._notice_angle = (self._notice_angle + 18) % 360
-            canvas.itemconfigure(arc,start=self._notice_angle)
-            self._notice_after = self.root.after(75,animate)
+            self._notice_angle = (self._notice_angle + 14) % 360
+            canvas.itemconfigure(arc, start=self._notice_angle)
+            self._notice_after = self.root.after(65, animate)
+
         animate()
 
     def _hide_test_notice(self):
