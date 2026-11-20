@@ -470,10 +470,13 @@ class DoctorApp:
         self.alert_status=label(alerts,'سامانه آماده است. هشدارهای واقعی پس از بررسی در این بخش نمایش داده می‌شوند.',8,C['muted'],bg=C['panel'],justify='right',anchor='ne',wraplength=230)
         self.alert_status.pack(fill='both',expand=True)
 
-        footer=tk.Frame(self.root,bg=C['header'],height=27,
+        footer=tk.Frame(self.root,bg=C['header'],height=42,
                         highlightbackground=C['edge'],highlightthickness=1)
         footer.pack(side='bottom',fill='x'); footer.pack_propagate(False)
-        label(footer,'طراحی و برنامه‌نویسی: جواد مختاری',8,C['white'],True,bg=C['header']).pack(side='right',padx=16)
+        credits=tk.Frame(footer,bg=C['header'])
+        credits.pack(side='right',padx=16,pady=3)
+        label(credits,'طراحی و برنامه‌نویسی: جواد مختاری',8,C['white'],True,bg=C['header']).pack(anchor='e')
+        label(credits,'حامی طرح: مدیریت بیمارستان، جناب آقای حسن‌زاده',7,C['muted'],False,bg=C['header']).pack(anchor='e')
         label(footer,'JAVAD PC DOCTOR  •  HARDWARE HEALTH MONITOR',7,C['cyan'],True,bg=C['header']).pack(side='left',padx=16)
 
     def _panel_title(self, parent, text):
@@ -769,12 +772,6 @@ class DoctorApp:
             return
         if self.running or self.stress_running:
             return
-        if not messagebox.askyesno('پایش هوشمند ۳۰ دقیقه‌ای',
-            'این فرایند ۳۰ دقیقه طول می‌کشد و با شدت سبک اجرا می‌شود.\n'
-            'هیچ پردازش سنگین، تخصیص آزمایشی RAM، تست دیسک یا بار گرافیکی اجرا نمی‌شود.\n'
-            'این فرایند به‌تنهایی تأیید سلامت قطعات محسوب نمی‌شود.\n\n'
-            'شروع شود؟'):
-            return
         self.tree.delete(*self.tree.get_children()); self.results=[]
         self.stress_cancel.clear(); self.running=True; self.stress_running=True
         self.status.config(text='● پایش مرحله‌ای در حال اجرا',fg=YELLOW)
@@ -921,6 +918,8 @@ def main():
     art.create_line(42,190,470,190,fill='#1b526e',width=2)
     art.create_text(42,216,text='طراحی و برنامه‌نویسی: جواد مختاری',anchor='w',
                     fill='#a8c3dc',font=('Segoe UI',10))
+    art.create_text(42,238,text='حامی طرح: مدیریت بیمارستان، جناب آقای حسن‌زاده',anchor='w',
+                    fill='#8faec8',font=('Segoe UI',9))
     tk.Label(splash,text='در حال آماده‌سازی محیط عیب‌یابی...',
              font=('Segoe UI',10),fg=TEXT,bg='#071629').pack(pady=(7,3))
     bar=ttk.Progressbar(splash,mode='indeterminate',length=660); bar.pack(pady=(0,12)); bar.start(12)
