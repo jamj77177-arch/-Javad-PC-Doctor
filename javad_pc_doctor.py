@@ -918,7 +918,7 @@ def main():
     art.create_line(42,190,470,190,fill='#1b526e',width=2)
     art.create_text(42,216,text='طراحی و برنامه‌نویسی: جواد مختاری',anchor='w',
                     fill='#a8c3dc',font=('Segoe UI',10))
-    art.create_text(42,238,text='حامی طرح: مدیریت بیمارستان، جناب آقای حسن‌زاده',anchor='w',
+    art.create_text(42,230,text='حامی طرح: مدیریت بیمارستان، جناب آقای حسن‌زاده',anchor='w',
                     fill='#8faec8',font=('Segoe UI',9))
     tk.Label(splash,text='در حال آماده‌سازی محیط عیب‌یابی...',
              font=('Segoe UI',10),fg=TEXT,bg='#071629').pack(pady=(7,3))
