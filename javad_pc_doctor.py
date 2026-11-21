@@ -13,8 +13,13 @@ try:
 except Exception:
     psutil = None
 
+try:
+    from diagnostic_engine import run_30_minute_diagnostic
+except Exception:
+    run_30_minute_diagnostic = None
+
 APP_NAME = 'Javad PC Doctor'
-VERSION = '1.6.0'
+VERSION = '1.7.0'
 BASE = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 ASSET_BASE = Path(getattr(sys, '_MEIPASS', BASE))
 REPORTS = BASE / 'Reports'
@@ -766,85 +771,62 @@ class DoctorApp:
         self.progress_label.config(text=f'پیشرفت پایش: {digits}٪  |  {stage}')
 
     def start_stress_test(self):
-        """Run a 30-minute visual-only simulation. It deliberately creates no hardware load."""
+        """Run a genuine, bounded 30-minute diagnostic; never label unavailable tests as passed."""
         if self.technician_assessment == 'انتخاب نشده':
             messagebox.showwarning('ارزیابی اولیه', 'ابتدا وضعیت سیستم را در بخش ارزیابی اولیه تکنسین انتخاب کنید.')
             return
         if self.running or self.stress_running:
             return
+        if run_30_minute_diagnostic is None:
+            messagebox.showerror('موتور آزمون', 'موتور آزمون واقعی بارگذاری نشد؛ هیچ آزمونی آغاز نمی‌شود.')
+            return
         self.tree.delete(*self.tree.get_children()); self.results=[]
         self.stress_cancel.clear(); self.running=True; self.stress_running=True
-        self.status.config(text='● پایش مرحله‌ای در حال اجرا',fg=YELLOW)
-        self.summary.config(text='پایش مرحله‌ای در حال اجراست؛ شدت سبک و بدون بار مصنوعی.')
+        self.status.config(text='● آزمون واقعی در حال اجرا',fg=YELLOW)
+        self.summary.config(text='آزمون‌های واقعی و محدود CPU، RAM، GPU و دیسک؛ نتایج فقط از اندازه‌گیری ثبت می‌شوند.')
         self.stress_start_btn.config(state='disabled'); self.stress_stop_btn.config(state='normal')
         self._show_test_notice()
-        self._stress_ui(0,'آماده‌سازی',1800,'پایش مرحله‌ای با شدت سبک')
+        self._stress_ui(0,'آماده‌سازی آزمون واقعی',1800,'آزمون‌های واقعی؛ شدت سبک و محدود')
         threading.Thread(target=self._stress_worker,daemon=True).start()
 
     def stop_stress_test(self):
         if self.stress_running:
             self.stress_cancel.set()
-            self.stress_stage.config(text='درخواست توقف پایش...')
+            self.stress_stage.config(text='درخواست توقف آزمون...')
             self.stress_stop_btn.config(state='disabled')
 
     def _stress_worker(self):
-        # Pure timer/UI simulation: no CPU benchmark, RAM allocation, disk scan, GPU rendering,
-        # or sensor polling is performed during this 30-minute sequence.
-        total = 30 * 60
-        phases = [
-            ('مرحله پردازنده (CPU)', 6 * 60, 'نمایش گرافیکی مرحله CPU • هیچ بار پردازشی تولید نمی‌شود'),
-            ('مرحله حافظه (RAM)', 6 * 60, 'نمایش مرحله RAM • هیچ حافظه‌ای برای آزمون تخصیص داده نمی‌شود'),
-            ('مرحله گرافیک (GPU)', 6 * 60, 'نمایش مرحله GPU • هیچ رندر یا تست سه‌بعدی اجرا نمی‌شود'),
-            ('مرحله دیسک (SSD / HDD)', 6 * 60, 'نمایش مرحله دیسک • هیچ اسکن یا عملیات خواندن/نوشتن انجام نمی‌شود'),
-            ('پایش و جمع‌بندی مرحله‌ای', 6 * 60, 'نمایش جمع‌بندی • هیچ حسگری در این حالت به‌صورت دوره‌ای خوانده نمی‌شود'),
-        ]
-        started = time.monotonic()
-        outcome = 'پایش تکمیل شد'
-        current_phase = 0
+        outcome = 'آزمون متوقف شد'
         try:
-            while True:
-                if self.stress_cancel.is_set():
-                    outcome = 'پایش توسط کاربر متوقف شد'
-                    break
-                elapsed = min(total, int(time.monotonic() - started))
-                remaining = max(0, total - elapsed)
-                pct = min(100, int(elapsed * 100 / total))
-                cumulative = 0
-                phase_idx = len(phases) - 1
-                for idx, (_, duration, _) in enumerate(phases):
-                    if elapsed < cumulative + duration:
-                        phase_idx = idx
-                        break
-                    cumulative += duration
-                current_phase = phase_idx
-                phase_name, _, detail = phases[phase_idx]
-                self._ui(self._stress_ui, pct, phase_name, remaining, detail + ' • حالت مرحله‌ای')
-                if remaining <= 0:
-                    break
-                self.stress_cancel.wait(1.0)
-            elapsed = int(time.monotonic() - started)
-            if outcome == 'پایش تکمیل شد':
-                self._ui(self._stress_ui, 100, 'پایش ۳۰ دقیقه‌ای تکمیل شد', 0,
-                         'مراحل پایش به پایان رسید؛ نتایج قطعات در آزمون‌های مستقل ثبت می‌شوند')
-            status = 'پایش'
-            detail = (f'{outcome}؛ مدت اجرا {elapsed//60:02d}:{elapsed%60:02d}. '
-                      'این فرآیند صرفاً مرحله‌ای بود؛ هیچ فشار یا تست واقعی روی CPU، RAM، GPU یا دیسک انجام نشد. '
-                      'نتیجه، سلامت قطعات را تأیید یا رد نمی‌کند.')
-            # تایمر پایش به‌عنوان نتیجه سلامت قطعات ثبت نمی‌شود
-            self._ui(self._stress_finish, outcome, status)
+            def progress(percent, stage, remaining, detail):
+                self._ui(self._stress_ui, percent, stage, remaining, detail)
+            def result_callback(result):
+                self._ui(self.add_result, result.get('test','آزمون'),
+                         result.get('status','نامشخص'), result.get('detail',''))
+            report = run_30_minute_diagnostic(self.stress_cancel, progress, result_callback)
+            elapsed = report.get('elapsed_seconds', 0)
+            if report.get('completed'):
+                outcome = 'آزمون واقعی ۳۰ دقیقه‌ای تکمیل شد'
+            elif report.get('cancelled'):
+                outcome = 'آزمون توسط کاربر متوقف شد'
+            else:
+                outcome = 'آزمون پیش از تکمیل پایان یافت'
+            self._ui(self._stress_finish, outcome, report)
         except Exception as exc:
-            # خطای رابط پایش در وضعیت برنامه نمایش داده می‌شود
-            self._ui(self._stress_finish, 'پایش با خطا متوقف شد', 'نیازمند بررسی')
+            self._ui(self._stress_finish, f'آزمون با خطا متوقف شد: {exc}', None)
 
-    def _stress_finish(self, outcome, status):
+    def _stress_finish(self, outcome, report):
         self.running=False; self.stress_running=False
         self._hide_test_notice()
         self.stress_start_btn.config(state='normal'); self.stress_stop_btn.config(state='disabled')
-        self.status.config(text='● '+outcome,fg=YELLOW)
-        self.summary.config(text='پایش پایان یافت؛ نتیجه مرحله‌ای است و سلامت واقعی قطعات را نشان نمی‌دهد.')
-        if outcome == 'پایش تکمیل شد':
-            self._stress_ui(100, 'پایش تکمیل شد', 0,
-                            'پایش پایان یافت • نتایج آزمون‌های مستقل در جدول ثبت می‌شوند')
+        self.status.config(text='● '+outcome,fg=GREEN if report and report.get('completed') else YELLOW)
+        if report and report.get('completed'):
+            self._stress_ui(100, 'آزمون ۳۰ دقیقه‌ای تکمیل شد', 0,
+                            'آزمون‌های واقعی انجام شدند؛ محدودیت هر قطعه در گزارش نهایی مشخص است.')
+            self.summary.config(text='آزمون واقعی پایان یافت؛ برای مشاهده جزئیات، گزارش را ذخیره کنید.')
+        else:
+            seconds = report.get('elapsed_seconds', 0) if report else 0
+            self.summary.config(text=f'آزمون کامل نشد؛ مدت اجرا {seconds//60:02d}:{seconds%60:02d}. نتایج ناقص به‌عنوان قبولی ثبت نمی‌شوند.')
 
     def show_sensors(self):
         try:
@@ -877,13 +859,24 @@ class DoctorApp:
         self.refresh_info()
         stamp=datetime.datetime.now().strftime('%Y%m%d_%H%M%S'); name=f"Report_{self.info.get('Computer','PC')}_{stamp}.txt".replace(' ','_')
         path=REPORTS/name
-        lines=[APP_NAME+f' v{VERSION}', 'زمان: '+datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '\n=== ارزیابی اولیه تکنسین (یادداشت داخلی) ===', self.technician_assessment, 'این ارزیابی دستی است و نتیجه اندازه‌گیری قطعات محسوب نمی‌شود.', '\n=== مشخصات سیستم ===']
+        lines=[APP_NAME+f' v{VERSION}', 'زمان: '+datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+               '\n=== ارزیابی اولیه تکنسین (یادداشت داخلی) ===', self.technician_assessment,
+               'این ارزیابی دستی است و نتیجه اندازه‌گیری قطعات محسوب نمی‌شود.',
+               '\n=== مشخصات سیستم ===']
         lines += [f'{k}: {v}' for k,v in self.info.items()]
-        lines += ['\n=== نتایج تست ===']
+        lines += ['\n=== نتایج آزمون‌ها ===']
         lines += [f"{r['test']} | {r['status']} | {r['detail']} | {r['time']}" for r in self.results]
-        lines += ['\nمحدودیت‌ها: فرایند ۳۰ دقیقه‌ای زمان‌بندی پایش مرحله‌ای است. بررسی CPU و RAM در این نسخه فقط خواندنی است و هیچ بار آزمایشی ایجاد نمی‌کند. ارزیابی دستی تکنسین جدا از نتایج واقعی نگهداری می‌شود و آن‌ها را تغییر نمی‌دهد. دمای CPU/GPU در همه سیستم‌ها قابل خواندن نیست؛ مقدار ناموجود نباید حدس زده شود.']
+        lines += ['\n=== روش اجرا و محدودیت‌ها ===',
+                  'آزمون ۳۰ دقیقه‌ای نسخه ۱.۷ شامل بار محاسباتی سبک روی یک رشته CPU، آزمون محدود نوشتن/بازخوانی حافظه تخصیص‌یافته RAM، آزمون Direct3D بومی WinSAT در صورت پشتیبانی، آزمون نوشتن/بازخوانی فایل موقت دیسک با تطبیق SHA-256 و پایش دوره‌ای است.',
+                  'فایل آزمون دیسک موقت است و پس از آزمون حذف می‌شود؛ فایل‌های شخصی کاربر تغییر داده نمی‌شوند.',
+                  'آزمون RAM درون ویندوز محدود به حافظه تخصیص‌یافته است و جایگزین MemTest86 بوتیبل برای بررسی کل حافظه نیست.',
+                  'اگر WinSAT/Direct3D یا سنسوری در دسترس نباشد، آن بخش «قابل اجرا نیست/نامشخص» گزارش می‌شود؛ عدم دسترسی به معنی قبولی یا خرابی نیست.',
+                  'آزمون دیسک با فایل موقت، جایگزین گزارش SMART سازنده یا اسکن کامل سطح دیسک نیست.',
+                  'آزمون سبک CPU و تست‌های محدود این برنامه گواهی سلامت قطعه یا جایگزین ابزار تخصصی سازنده نیستند.',
+                  'ارزیابی اولیه تکنسین جدا از داده‌های اندازه‌گیری‌شده نگهداری می‌شود و نتایج را تغییر نمی‌دهد.']
         path.write_text('\n'.join(lines),encoding='utf-8-sig')
         messagebox.showinfo('گزارش ذخیره شد',f'گزارش ذخیره شد:\n{path}')
+
     def open_reports(self):
         REPORTS.mkdir(exist_ok=True)
         if os.name=='nt': os.startfile(str(REPORTS))
