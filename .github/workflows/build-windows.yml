@@ -27,7 +27,7 @@ jobs:
           pip install pyinstaller
 
       - name: Check Python syntax
-        run: python -m py_compile javad_pc_doctor.py
+        run: python -m py_compile javad_pc_doctor.py diagnostic_engine.py
 
       - name: Build EXE
         run: |
