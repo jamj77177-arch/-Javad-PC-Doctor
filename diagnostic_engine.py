@@ -117,6 +117,7 @@ def _gpu_test(seconds, cancel, progress, started, total_before):
     detail = "پایش مرحله GPU؛ آزمون بار سه‌بعدی در حال بررسی قابلیت ویندوز است."
     result = "قابل اجرا نیست"
     test_detail = "ابزار WinSAT/Direct3D در این ویندوز در دسترس نیست؛ تست سه‌بعدی GPU اجرا نشد. فقط شناسایی و پایش حسگرها ممکن است."
+    begin = time.monotonic()
     if os.name == "nt":
         try:
             win = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32" / "winsat.exe"
@@ -134,7 +135,6 @@ def _gpu_test(seconds, cancel, progress, started, total_before):
             test_detail = "آزمون Direct3D از مهلت ۷۵ ثانیه عبور کرد و متوقف شد؛ نتیجه GPU نامشخص است."
         except Exception as exc:
             test_detail = f"اجرای آزمون Direct3D ممکن نشد: {exc}"
-    begin = time.monotonic()
     while time.monotonic() - begin < seconds and not _cancelled(cancel):
         elapsed = min(seconds, time.monotonic() - begin)
         remaining = max(0, TOTAL_SECONDS - int(time.monotonic() - started))
