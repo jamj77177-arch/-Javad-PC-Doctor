@@ -273,7 +273,7 @@ class DoctorApp:
             ico = ASSET_BASE / 'assets' / 'JavadPCDoctor.ico'
             if ico.exists(): self.root.iconbitmap(str(ico))
         except Exception: pass
-        self.results = []; self.running = False; self.stress_running = False; self.stress_cancel = threading.Event(); self.info = get_system_info(); self.technician_assessment = 'انتخاب نشده'
+        self.results = []; self.running = False; self.stress_running = False; self.stress_cancel = threading.Event(); self.info = get_system_info(); self.technician_assessment = 'انتخاب نشده'; self.stress_temp_max = {}; self.stress_temp_samples = {}
         self._style(); self._build(); self.refresh_info(); self.temp_monitor_stop = threading.Event(); self.root.after(700, self.start_temperature_monitor)
 
     def _style(self):
@@ -527,6 +527,9 @@ class DoctorApp:
             if readings:
                 values = [v for _, v in readings]
                 hottest = max(values)
+                if getattr(self, 'stress_running', False):
+                    self.stress_temp_max[key] = max(hottest, self.stress_temp_max.get(key, hottest))
+                    self.stress_temp_samples[key] = self.stress_temp_samples.get(key, 0) + 1
                 value_label.config(text=f'{hottest:.1f} °C',
                                    fg=RED if hottest >= 85 else (YELLOW if hottest >= 75 else CYAN))
                 names = ' • '.join(f'{name.split("/")[-1]}: {temp:.1f}°' for name, temp in readings[:3])
@@ -781,6 +784,7 @@ class DoctorApp:
             messagebox.showerror('موتور آزمون', 'موتور آزمون واقعی بارگذاری نشد؛ هیچ آزمونی آغاز نمی‌شود.')
             return
         self.tree.delete(*self.tree.get_children()); self.results=[]
+        self.stress_temp_max = {}; self.stress_temp_samples = {}
         self.stress_cancel.clear(); self.running=True; self.stress_running=True
         self.status.config(text='● آزمون واقعی در حال اجرا',fg=YELLOW)
         self.summary.config(text='آزمون‌های واقعی و محدود CPU، RAM، GPU و دیسک؛ نتایج فقط از اندازه‌گیری ثبت می‌شوند.')
@@ -816,6 +820,11 @@ class DoctorApp:
             self._ui(self._stress_finish, f'آزمون با خطا متوقف شد: {exc}', None)
 
     def _stress_finish(self, outcome, report):
+        if self.stress_temp_max:
+            temp_parts = [f"{key}: بیشینه {value:.1f}°C ({self.stress_temp_samples.get(key, 0)} نمونه)" for key, value in self.stress_temp_max.items()]
+            self.add_result('دما', 'ثبت شد', ' | '.join(temp_parts))
+        else:
+            self.add_result('دما', 'نامشخص', 'در طول آزمون هیچ سنسور دمای قابل خواندنی در دسترس نبود؛ دما حدس زده نشده است.')
         self.running=False; self.stress_running=False
         self._hide_test_notice()
         self.stress_start_btn.config(state='normal'); self.stress_stop_btn.config(state='disabled')
